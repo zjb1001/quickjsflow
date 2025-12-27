@@ -53,6 +53,7 @@ struct AstNode {
     AstNodeType type;
     Position start;
     Position end;
+    int refcount; // reference count for structural sharing
     void *data; // type-specific payload
 };
 
@@ -281,5 +282,8 @@ AstNode *ast_error(const char *msg, Position s, Position e);
 // JSON printer
 void ast_print_json(const AstNode *node);
 void ast_free(AstNode *node);
+void ast_retain(AstNode *node);
+void ast_release(AstNode *node);
+AstNode *ast_clone(const AstNode *node);
 
 #endif

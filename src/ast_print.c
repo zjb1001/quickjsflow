@@ -40,7 +40,10 @@ void astvec_push(AstVec *v, AstNode *n) {
 
 static AstNode *new_node(AstNodeType t) {
     AstNode *n = (AstNode *)calloc(1, sizeof(AstNode));
-    if (n) n->type = t;
+    if (n) {
+        n->type = t;
+        n->refcount = 1;
+    }
     return n;
 }
 
@@ -723,12 +726,406 @@ void ast_print_json(const AstNode *node) {
 
 static void free_node(AstNode *n);
 
-void ast_free(AstNode *n) {
-    free_node(n);
+void ast_retain(AstNode *node) {
+    if (!node) return;
+    node->refcount++;
+}
+
+void ast_release(AstNode *node) {
+    if (!node) return;
+    if (--node->refcount > 0) return;
+    free_node(node);
+}
+
+void ast_free(AstNode *node) {
+    ast_release(node);
+}
+
+static AstNode *clone_node(const AstNode *node);
+
+AstNode *ast_clone(const AstNode *node) {
+    return clone_node(node);
+}
+
+// --- implementation helpers ---
+
+static AstNode *clone_node(const AstNode *n) {
+    if (!n) return NULL;
+    AstNode *c = new_node(n->type);
+    if (!c) return NULL;
+    c->start = n->start;
+    c->end = n->end;
+    switch (n->type) {
+        case AST_Program: {
+            Program *orig = (Program *)n->data;
+            Program *cp = (Program *)calloc(1, sizeof(Program));
+            astvec_init(&cp->body);
+            for (size_t i = 0; orig && i < orig->body.count; ++i) {
+                astvec_push(&cp->body, clone_node(orig->body.items[i]));
+            }
+            c->data = cp;
+            break;
+        }
+        case AST_VariableDeclaration: {
+            VariableDeclaration *vd = (VariableDeclaration *)n->data;
+            VariableDeclaration *cvd = (VariableDeclaration *)calloc(1, sizeof(VariableDeclaration));
+            if (vd) {
+                cvd->kind = vd->kind;
+                astvec_init(&cvd->declarations);
+                for (size_t i = 0; i < vd->declarations.count; ++i) {
+                    astvec_push(&cvd->declarations, clone_node(vd->declarations.items[i]));
+                }
+            }
+            c->data = cvd;
+            break;
+        }
+        case AST_VariableDeclarator: {
+            VariableDeclarator *vd = (VariableDeclarator *)n->data;
+            VariableDeclarator *cvd = (VariableDeclarator *)calloc(1, sizeof(VariableDeclarator));
+            if (vd) {
+                cvd->id = clone_node(vd->id);
+                cvd->init = clone_node(vd->init);
+            }
+            c->data = cvd;
+            break;
+        }
+        case AST_Identifier: {
+            Identifier *id = (Identifier *)n->data;
+            Identifier *cid = (Identifier *)calloc(1, sizeof(Identifier));
+            if (id && id->name) cid->name = dupstr(id->name);
+            c->data = cid;
+            break;
+        }
+        case AST_Literal: {
+            Literal *lit = (Literal *)n->data;
+            Literal *clit = (Literal *)calloc(1, sizeof(Literal));
+            if (lit) {
+                clit->kind = lit->kind;
+                clit->raw = dupstr(lit->raw);
+            }
+            c->data = clit;
+            break;
+        }
+        case AST_ExpressionStatement: {
+            ExpressionStatement *es = (ExpressionStatement *)n->data;
+            ExpressionStatement *ces = (ExpressionStatement *)calloc(1, sizeof(ExpressionStatement));
+            if (es) ces->expression = clone_node(es->expression);
+            c->data = ces;
+            break;
+        }
+        case AST_UpdateExpression: {
+            UpdateExpression *ue = (UpdateExpression *)n->data;
+            UpdateExpression *cue = (UpdateExpression *)calloc(1, sizeof(UpdateExpression));
+            if (ue) {
+                cue->prefix = ue->prefix;
+                cue->operator = dupstr(ue->operator);
+                cue->argument = clone_node(ue->argument);
+            }
+            c->data = cue;
+            break;
+        }
+        case AST_BinaryExpression: {
+            BinaryExpression *be = (BinaryExpression *)n->data;
+            BinaryExpression *cbe = (BinaryExpression *)calloc(1, sizeof(BinaryExpression));
+            if (be) {
+                cbe->operator = dupstr(be->operator);
+                cbe->left = clone_node(be->left);
+                cbe->right = clone_node(be->right);
+            }
+            c->data = cbe;
+            break;
+        }
+        case AST_AssignmentExpression: {
+            AssignmentExpression *ae = (AssignmentExpression *)n->data;
+            AssignmentExpression *cae = (AssignmentExpression *)calloc(1, sizeof(AssignmentExpression));
+            if (ae) {
+                cae->operator = dupstr(ae->operator);
+                cae->left = clone_node(ae->left);
+                cae->right = clone_node(ae->right);
+            }
+            c->data = cae;
+            break;
+        }
+        case AST_UnaryExpression: {
+            UnaryExpression *ue = (UnaryExpression *)n->data;
+            UnaryExpression *cue = (UnaryExpression *)calloc(1, sizeof(UnaryExpression));
+            if (ue) {
+                cue->operator = dupstr(ue->operator);
+                cue->prefix = ue->prefix;
+                cue->argument = clone_node(ue->argument);
+            }
+            c->data = cue;
+            break;
+        }
+        case AST_ObjectExpression: {
+            ObjectExpression *oe = (ObjectExpression *)n->data;
+            ObjectExpression *coe = (ObjectExpression *)calloc(1, sizeof(ObjectExpression));
+            astvec_init(&coe->properties);
+            if (oe) {
+                for (size_t i = 0; i < oe->properties.count; ++i) {
+                    astvec_push(&coe->properties, clone_node(oe->properties.items[i]));
+                }
+            }
+            c->data = coe;
+            break;
+        }
+        case AST_Property: {
+            Property *prop = (Property *)n->data;
+            Property *cprop = (Property *)calloc(1, sizeof(Property));
+            if (prop) {
+                cprop->computed = prop->computed;
+                cprop->key = clone_node(prop->key);
+                cprop->value = clone_node(prop->value);
+            }
+            c->data = cprop;
+            break;
+        }
+        case AST_ArrayExpression: {
+            ArrayExpression *ae = (ArrayExpression *)n->data;
+            ArrayExpression *cae = (ArrayExpression *)calloc(1, sizeof(ArrayExpression));
+            astvec_init(&cae->elements);
+            if (ae) {
+                for (size_t i = 0; i < ae->elements.count; ++i) {
+                    astvec_push(&cae->elements, clone_node(ae->elements.items[i]));
+                }
+            }
+            c->data = cae;
+            break;
+        }
+        case AST_MemberExpression: {
+            MemberExpression *me = (MemberExpression *)n->data;
+            MemberExpression *cme = (MemberExpression *)calloc(1, sizeof(MemberExpression));
+            if (me) {
+                cme->computed = me->computed;
+                cme->object = clone_node(me->object);
+                cme->property = clone_node(me->property);
+            }
+            c->data = cme;
+            break;
+        }
+        case AST_CallExpression: {
+            CallExpression *ce = (CallExpression *)n->data;
+            CallExpression *cce = (CallExpression *)calloc(1, sizeof(CallExpression));
+            astvec_init(&cce->arguments);
+            if (ce) {
+                cce->callee = clone_node(ce->callee);
+                for (size_t i = 0; i < ce->arguments.count; ++i) {
+                    astvec_push(&cce->arguments, clone_node(ce->arguments.items[i]));
+                }
+            }
+            c->data = cce;
+            break;
+        }
+        case AST_FunctionDeclaration:
+        case AST_FunctionExpression: {
+            FunctionBody *fb = (FunctionBody *)n->data;
+            FunctionBody *cfb = (FunctionBody *)calloc(1, sizeof(FunctionBody));
+            if (fb) {
+                cfb->name = dupstr(fb->name);
+                astvec_init(&cfb->params);
+                for (size_t i = 0; i < fb->params.count; ++i) {
+                    astvec_push(&cfb->params, clone_node(fb->params.items[i]));
+                }
+                cfb->body = clone_node(fb->body);
+            }
+            c->data = cfb;
+            break;
+        }
+        case AST_BlockStatement: {
+            BlockStatement *bs = (BlockStatement *)n->data;
+            BlockStatement *cbs = (BlockStatement *)calloc(1, sizeof(BlockStatement));
+            astvec_init(&cbs->body);
+            if (bs) {
+                for (size_t i = 0; i < bs->body.count; ++i) {
+                    astvec_push(&cbs->body, clone_node(bs->body.items[i]));
+                }
+            }
+            c->data = cbs;
+            break;
+        }
+        case AST_IfStatement: {
+            IfStatement *is = (IfStatement *)n->data;
+            IfStatement *cis = (IfStatement *)calloc(1, sizeof(IfStatement));
+            if (is) {
+                cis->test = clone_node(is->test);
+                cis->consequent = clone_node(is->consequent);
+                cis->alternate = clone_node(is->alternate);
+            }
+            c->data = cis;
+            break;
+        }
+        case AST_WhileStatement: {
+            WhileStatement *ws = (WhileStatement *)n->data;
+            WhileStatement *cws = (WhileStatement *)calloc(1, sizeof(WhileStatement));
+            if (ws) {
+                cws->test = clone_node(ws->test);
+                cws->body = clone_node(ws->body);
+            }
+            c->data = cws;
+            break;
+        }
+        case AST_DoWhileStatement: {
+            DoWhileStatement *dw = (DoWhileStatement *)n->data;
+            DoWhileStatement *cdw = (DoWhileStatement *)calloc(1, sizeof(DoWhileStatement));
+            if (dw) {
+                cdw->body = clone_node(dw->body);
+                cdw->test = clone_node(dw->test);
+            }
+            c->data = cdw;
+            break;
+        }
+        case AST_ForStatement: {
+            ForStatement *fs = (ForStatement *)n->data;
+            ForStatement *cfs = (ForStatement *)calloc(1, sizeof(ForStatement));
+            if (fs) {
+                cfs->init = clone_node(fs->init);
+                cfs->test = clone_node(fs->test);
+                cfs->update = clone_node(fs->update);
+                cfs->body = clone_node(fs->body);
+            }
+            c->data = cfs;
+            break;
+        }
+        case AST_SwitchStatement: {
+            SwitchStatement *ss = (SwitchStatement *)n->data;
+            SwitchStatement *css = (SwitchStatement *)calloc(1, sizeof(SwitchStatement));
+            astvec_init(&css->cases);
+            if (ss) {
+                css->discriminant = clone_node(ss->discriminant);
+                for (size_t i = 0; i < ss->cases.count; ++i) {
+                    astvec_push(&css->cases, clone_node(ss->cases.items[i]));
+                }
+            }
+            c->data = css;
+            break;
+        }
+        case AST_SwitchCase: {
+            SwitchCase *sc = (SwitchCase *)n->data;
+            SwitchCase *csc = (SwitchCase *)calloc(1, sizeof(SwitchCase));
+            astvec_init(&csc->consequent);
+            if (sc) {
+                csc->test = clone_node(sc->test);
+                for (size_t i = 0; i < sc->consequent.count; ++i) {
+                    astvec_push(&csc->consequent, clone_node(sc->consequent.items[i]));
+                }
+            }
+            c->data = csc;
+            break;
+        }
+        case AST_TryStatement: {
+            TryStatement *ts = (TryStatement *)n->data;
+            TryStatement *cts = (TryStatement *)calloc(1, sizeof(TryStatement));
+            astvec_init(&cts->handlers);
+            if (ts) {
+                cts->block = clone_node(ts->block);
+                for (size_t i = 0; i < ts->handlers.count; ++i) {
+                    astvec_push(&cts->handlers, clone_node(ts->handlers.items[i]));
+                }
+                cts->finalizer = clone_node(ts->finalizer);
+            }
+            c->data = cts;
+            break;
+        }
+        case AST_CatchClause: {
+            CatchClause *cc = (CatchClause *)n->data;
+            CatchClause *ccc = (CatchClause *)calloc(1, sizeof(CatchClause));
+            if (cc) {
+                ccc->param = clone_node(cc->param);
+                ccc->body = clone_node(cc->body);
+            }
+            c->data = ccc;
+            break;
+        }
+        case AST_ThrowStatement: {
+            ThrowStatement *ts = (ThrowStatement *)n->data;
+            ThrowStatement *cts = (ThrowStatement *)calloc(1, sizeof(ThrowStatement));
+            if (ts) cts->argument = clone_node(ts->argument);
+            c->data = cts;
+            break;
+        }
+        case AST_ReturnStatement: {
+            ReturnStatement *rs = (ReturnStatement *)n->data;
+            ReturnStatement *crs = (ReturnStatement *)calloc(1, sizeof(ReturnStatement));
+            if (rs) crs->argument = clone_node(rs->argument);
+            c->data = crs;
+            break;
+        }
+        case AST_BreakStatement: {
+            BreakStatement *bs = (BreakStatement *)n->data;
+            BreakStatement *cbs = (BreakStatement *)calloc(1, sizeof(BreakStatement));
+            if (bs && bs->label) cbs->label = dupstr(bs->label);
+            c->data = cbs;
+            break;
+        }
+        case AST_ContinueStatement: {
+            ContinueStatement *cs = (ContinueStatement *)n->data;
+            ContinueStatement *ccs = (ContinueStatement *)calloc(1, sizeof(ContinueStatement));
+            if (cs && cs->label) ccs->label = dupstr(cs->label);
+            c->data = ccs;
+            break;
+        }
+        case AST_ImportDeclaration: {
+            ImportDeclaration *id = (ImportDeclaration *)n->data;
+            ImportDeclaration *cid = (ImportDeclaration *)calloc(1, sizeof(ImportDeclaration));
+            astvec_init(&cid->specifiers);
+            if (id) {
+                cid->source = dupstr(id->source);
+                for (size_t i = 0; i < id->specifiers.count; ++i) {
+                    astvec_push(&cid->specifiers, clone_node(id->specifiers.items[i]));
+                }
+            }
+            c->data = cid;
+            break;
+        }
+        case AST_ImportSpecifier: {
+            ImportSpecifier *is = (ImportSpecifier *)n->data;
+            ImportSpecifier *cis = (ImportSpecifier *)calloc(1, sizeof(ImportSpecifier));
+            if (is) {
+                cis->imported = clone_node(is->imported);
+                cis->local = clone_node(is->local);
+            }
+            c->data = cis;
+            break;
+        }
+        case AST_ExportNamedDeclaration: {
+            ExportNamedDeclaration *en = (ExportNamedDeclaration *)n->data;
+            ExportNamedDeclaration *cen = (ExportNamedDeclaration *)calloc(1, sizeof(ExportNamedDeclaration));
+            astvec_init(&cen->specifiers);
+            if (en) {
+                cen->source = dupstr(en->source);
+                for (size_t i = 0; i < en->specifiers.count; ++i) {
+                    astvec_push(&cen->specifiers, clone_node(en->specifiers.items[i]));
+                }
+                cen->declaration = clone_node(en->declaration);
+            }
+            c->data = cen;
+            break;
+        }
+        case AST_ExportDefaultDeclaration: {
+            ExportDefaultDeclaration *ed = (ExportDefaultDeclaration *)n->data;
+            ExportDefaultDeclaration *ced = (ExportDefaultDeclaration *)calloc(1, sizeof(ExportDefaultDeclaration));
+            if (ed) {
+                ced->declaration = clone_node(ed->declaration);
+                ced->expression = clone_node(ed->expression);
+            }
+            c->data = ced;
+            break;
+        }
+        case AST_Error: {
+            ErrorNode *er = (ErrorNode *)n->data;
+            ErrorNode *cer = (ErrorNode *)calloc(1, sizeof(ErrorNode));
+            if (er && er->message) cer->message = dupstr(er->message);
+            c->data = cer;
+            break;
+        }
+        default:
+            break;
+    }
+    return c;
 }
 
 static void free_program(Program *p) {
-    for (size_t i = 0; i < p->body.count; ++i) free_node(p->body.items[i]);
+    for (size_t i = 0; i < p->body.count; ++i) ast_release(p->body.items[i]);
     free(p->body.items);
     free(p);
 }
@@ -736,79 +1133,79 @@ static void free_program(Program *p) {
 static void free_identifier(Identifier *id) { free(id->name); free(id); }
 static void free_literal(Literal *lit) { free(lit->raw); free(lit); }
 static void free_vardecl(VariableDeclaration *vd) {
-    for (size_t i = 0; i < vd->declarations.count; ++i) free_node(vd->declarations.items[i]);
+    for (size_t i = 0; i < vd->declarations.count; ++i) ast_release(vd->declarations.items[i]);
     free(vd->declarations.items); free(vd);
 }
-static void free_vardeclarator(VariableDeclarator *vd) { free_node(vd->id); free_node(vd->init); free(vd); }
-static void free_exprstmt(ExpressionStatement *es) { free_node(es->expression); free(es); }
-static void free_update(UpdateExpression *ue) { free(ue->operator); free_node(ue->argument); free(ue); }
-static void free_binary(BinaryExpression *be) { free(be->operator); free_node(be->left); free_node(be->right); free(be); }
-static void free_assignment(AssignmentExpression *ae) { free(ae->operator); free_node(ae->left); free_node(ae->right); free(ae); }
-static void free_unary(UnaryExpression *ue) { free(ue->operator); free_node(ue->argument); free(ue); }
+static void free_vardeclarator(VariableDeclarator *vd) { ast_release(vd->id); ast_release(vd->init); free(vd); }
+static void free_exprstmt(ExpressionStatement *es) { ast_release(es->expression); free(es); }
+static void free_update(UpdateExpression *ue) { free(ue->operator); ast_release(ue->argument); free(ue); }
+static void free_binary(BinaryExpression *be) { free(be->operator); ast_release(be->left); ast_release(be->right); free(be); }
+static void free_assignment(AssignmentExpression *ae) { free(ae->operator); ast_release(ae->left); ast_release(ae->right); free(ae); }
+static void free_unary(UnaryExpression *ue) { free(ue->operator); ast_release(ue->argument); free(ue); }
 static void free_object_expr(ObjectExpression *obj) {
-    for (size_t i = 0; i < obj->properties.count; ++i) free_node(obj->properties.items[i]);
+    for (size_t i = 0; i < obj->properties.count; ++i) ast_release(obj->properties.items[i]);
     free(obj->properties.items); free(obj);
 }
-static void free_property(Property *prop) { free_node(prop->key); free_node(prop->value); free(prop); }
+static void free_property(Property *prop) { ast_release(prop->key); ast_release(prop->value); free(prop); }
 static void free_array_expr(ArrayExpression *arr) {
-    for (size_t i = 0; i < arr->elements.count; ++i) free_node(arr->elements.items[i]);
+    for (size_t i = 0; i < arr->elements.count; ++i) ast_release(arr->elements.items[i]);
     free(arr->elements.items); free(arr);
 }
-static void free_member_expr(MemberExpression *me) { free_node(me->object); free_node(me->property); free(me); }
+static void free_member_expr(MemberExpression *me) { ast_release(me->object); ast_release(me->property); free(me); }
 static void free_call_expr(CallExpression *ce) {
-    free_node(ce->callee);
-    for (size_t i = 0; i < ce->arguments.count; ++i) free_node(ce->arguments.items[i]);
+    ast_release(ce->callee);
+    for (size_t i = 0; i < ce->arguments.count; ++i) ast_release(ce->arguments.items[i]);
     free(ce->arguments.items); free(ce);
 }
 static void free_function_body(FunctionBody *fb) {
     free(fb->name);
-    for (size_t i = 0; i < fb->params.count; ++i) free_node(fb->params.items[i]);
+    for (size_t i = 0; i < fb->params.count; ++i) ast_release(fb->params.items[i]);
     free(fb->params.items);
-    free_node(fb->body);
+    ast_release(fb->body);
     free(fb);
 }
 static void free_block_stmt(BlockStatement *bs) {
-    for (size_t i = 0; i < bs->body.count; ++i) free_node(bs->body.items[i]);
+    for (size_t i = 0; i < bs->body.count; ++i) ast_release(bs->body.items[i]);
     free(bs->body.items); free(bs);
 }
-static void free_if_stmt(IfStatement *is) { free_node(is->test); free_node(is->consequent); free_node(is->alternate); free(is); }
-static void free_while_stmt(WhileStatement *ws) { free_node(ws->test); free_node(ws->body); free(ws); }
-static void free_do_while_stmt(DoWhileStatement *dws) { free_node(dws->body); free_node(dws->test); free(dws); }
-static void free_for_stmt(ForStatement *fs) { free_node(fs->init); free_node(fs->test); free_node(fs->update); free_node(fs->body); free(fs); }
+static void free_if_stmt(IfStatement *is) { ast_release(is->test); ast_release(is->consequent); ast_release(is->alternate); free(is); }
+static void free_while_stmt(WhileStatement *ws) { ast_release(ws->test); ast_release(ws->body); free(ws); }
+static void free_do_while_stmt(DoWhileStatement *dws) { ast_release(dws->body); ast_release(dws->test); free(dws); }
+static void free_for_stmt(ForStatement *fs) { ast_release(fs->init); ast_release(fs->test); ast_release(fs->update); ast_release(fs->body); free(fs); }
 static void free_switch_stmt(SwitchStatement *ss) {
-    free_node(ss->discriminant);
-    for (size_t i = 0; i < ss->cases.count; ++i) free_node(ss->cases.items[i]);
+    ast_release(ss->discriminant);
+    for (size_t i = 0; i < ss->cases.count; ++i) ast_release(ss->cases.items[i]);
     free(ss->cases.items); free(ss);
 }
 static void free_switch_case(SwitchCase *sc) {
-    free_node(sc->test);
-    for (size_t i = 0; i < sc->consequent.count; ++i) free_node(sc->consequent.items[i]);
+    ast_release(sc->test);
+    for (size_t i = 0; i < sc->consequent.count; ++i) ast_release(sc->consequent.items[i]);
     free(sc->consequent.items); free(sc);
 }
 static void free_try_stmt(TryStatement *ts) {
-    free_node(ts->block);
-    for (size_t i = 0; i < ts->handlers.count; ++i) free_node(ts->handlers.items[i]);
+    ast_release(ts->block);
+    for (size_t i = 0; i < ts->handlers.count; ++i) ast_release(ts->handlers.items[i]);
     free(ts->handlers.items);
-    free_node(ts->finalizer); free(ts);
+    ast_release(ts->finalizer); free(ts);
 }
-static void free_catch_clause(CatchClause *cc) { free_node(cc->param); free_node(cc->body); free(cc); }
-static void free_throw_stmt(ThrowStatement *ts) { free_node(ts->argument); free(ts); }
-static void free_return_stmt(ReturnStatement *rs) { free_node(rs->argument); free(rs); }
+static void free_catch_clause(CatchClause *cc) { ast_release(cc->param); ast_release(cc->body); free(cc); }
+static void free_throw_stmt(ThrowStatement *ts) { ast_release(ts->argument); free(ts); }
+static void free_return_stmt(ReturnStatement *rs) { ast_release(rs->argument); free(rs); }
 static void free_break_stmt(BreakStatement *bs) { free(bs->label); free(bs); }
 static void free_continue_stmt(ContinueStatement *cs) { free(cs->label); free(cs); }
 static void free_import_decl(ImportDeclaration *id) {
-    for (size_t i = 0; i < id->specifiers.count; ++i) free_node(id->specifiers.items[i]);
+    for (size_t i = 0; i < id->specifiers.count; ++i) ast_release(id->specifiers.items[i]);
     free(id->specifiers.items);
     free(id->source); free(id);
 }
-static void free_import_spec(ImportSpecifier *is) { free_node(is->imported); free_node(is->local); free(is); }
+static void free_import_spec(ImportSpecifier *is) { ast_release(is->imported); ast_release(is->local); free(is); }
 static void free_export_named(ExportNamedDeclaration *end) {
-    for (size_t i = 0; i < end->specifiers.count; ++i) free_node(end->specifiers.items[i]);
+    for (size_t i = 0; i < end->specifiers.count; ++i) ast_release(end->specifiers.items[i]);
     free(end->specifiers.items);
     free(end->source);
-    free_node(end->declaration); free(end);
+    ast_release(end->declaration); free(end);
 }
-static void free_export_default(ExportDefaultDeclaration *edd) { free_node(edd->declaration); free_node(edd->expression); free(edd); }
+static void free_export_default(ExportDefaultDeclaration *edd) { ast_release(edd->declaration); ast_release(edd->expression); free(edd); }
 static void free_error(ErrorNode *er) { /*free(er->message);*/ free(er); }
 
 static void free_node(AstNode *n) {
