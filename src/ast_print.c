@@ -586,10 +586,12 @@ static void print_return_statement(const ReturnStatement *rs) {
 }
 
 static void print_break_statement(const BreakStatement *bs) {
+    (void)bs;
     printf("\"label\":null");
 }
 
 static void print_continue_statement(const ContinueStatement *cs) {
+    (void)cs;
     printf("\"label\":null");
 }
 
