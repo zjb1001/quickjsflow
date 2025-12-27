@@ -133,7 +133,7 @@ make clean && make
 ### 完整文档
 
 - 📖 [完整用户指南](docs/CLI_PLUGIN_GUIDE.md)
-- 📋 [快速参考](docs/CLI_QUICK_REFERENCE.md)
+- 📋 [快速参考](docs/cli-quick-reference.md)
 - 🔧 [插件开发指南](docs/ISSUE_08_IMPLEMENTATION.md)
 - 🇨🇳 [中文实现总结](docs/ISSUE_08_SUMMARY_CN.md)
 
