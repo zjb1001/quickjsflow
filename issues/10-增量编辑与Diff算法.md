@@ -9,6 +9,19 @@
 - 编辑器实时反馈
 - 保持编辑历史中的节点引用稳定性
 
+## 📁 项目结构与开发环境
+
+参考根目录 [issues/00-完整Issue清单与执行计划.md](00-完整Issue清单与执行计划.md) 的**项目结构**与**构建与测试命令**章节。关键路径：
+- 源码：`src/diff.c`, `include/quickjsflow/diff.h`（待实现，Phase 2）
+- 测试：`test/test_incremental.c`（待实现）
+- 构建：`make && make test`
+- 当前状态：MVP 版本使用全量重解析，Phase 2 后考虑增量优化
+- 性能目标：行级编辑不触发全文重解析
+
+## 优先级
+🟡 **Phase 2**（MVP 后优化）
+
+
 ## 技术要点
 
 ### 文本 Diff 与变更定位

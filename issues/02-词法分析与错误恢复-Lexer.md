@@ -10,6 +10,14 @@
 - 依赖：Issue 01（容错策略）、Issue 12（语法矩阵）
 - 目标版本：v0.1.0（MVP）
 
+## 📁 项目结构与开发环境
+
+参考根目录 [issues/00-完整Issue清单与执行计划.md](00-完整Issue清单与执行计划.md) 的**项目结构**与**构建与测试命令**章节。关键路径：
+- 源码：`src/lexer.c`, `include/quickjsflow/lexer.h`
+- 测试：`test/test_integration.c`（Lexer+Parser 端到端）
+- 示例：`examples/` 目录含容错测试用例
+- 构建：`make` 编译，`make test` 运行测试
+
 ## 技术要点
 
 ### 核心 Token 类型（基于 ESTree 与常见编程语言惯例）

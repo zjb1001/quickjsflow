@@ -5,6 +5,15 @@
 
 **详细实现规范见 Issue 13：作用域分析细化实现规范**
 
+## 📁 项目结构与开发环境
+
+参考根目录 [issues/00-完整Issue清单与执行计划.md](00-完整Issue清单与执行计划.md) 的**项目结构**与**构建与测试命令**章节。关键路径：
+- 源码：`src/scope.c`, `include/quickjsflow/scope.h`（待实现）
+- 测试：`test/test_scope.c`（待实现）
+- 依赖：Issue 03（Parser）产出的 AST
+- 构建：`make && make test`
+- 集成：Issue 11（集成测试）框架已就位
+
 ## 技术要点
 
 ### MVP 作用域类型（Issue 13 优先级区分）

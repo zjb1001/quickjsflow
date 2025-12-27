@@ -8,6 +8,19 @@
 - 类型：Feature（核心管线）
 - 标签：codegen, printer, sourcemap, formatting, mvp
 - 负责人：@page
+
+## 📁 项目结构与开发环境
+
+参考根目录 [issues/00-完整Issue清单与执行计划.md](00-完整Issue清单与执行计划.md) 的**项目结构**与**构建与测试命令**章节。关键路径：
+- 源码：`src/codegen.c`, `include/quickjsflow/codegen.h`（待实现）
+- 测试：`test/test_roundtrip.c`（已有框架，等待 codegen 集成）
+- 依赖：Issue 03（Parser/AST）, Issue 05（Edit API 可选）
+- 构建：`make && make test`
+- Round-trip：`make test` 运行 test_roundtrip，验证 parse→print→parse 等价性
+
+## 技术要点
+
+### 需求
 - 依赖：Issue 03（AST）、Issue 05（Edit API）
 - 目标版本：v0.1.0（MVP）
 

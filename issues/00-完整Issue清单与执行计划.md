@@ -19,9 +19,78 @@
 - 预计周期：3–4 周（含并行项）
 - 相关文档：README、QUICK_REFERENCE、Issue 12/13
 
+## � 项目结构与开发环境
+
+### 目录组织
+```
+quickjsflow/
+├── src/                          # 核心源码
+│   ├── main.c                   # CLI 入口
+│   ├── lexer.c                  # 词法分析实现
+│   ├── parser.c                 # 语法分析实现
+│   └── ast_print.c              # AST JSON 打印与内存管理
+├── include/quickjsflow/          # 公开头文件
+│   ├── lexer.h                  # Lexer API
+│   ├── parser.h                 # Parser API
+│   └── ast.h                    # AST 定义与构造器
+├── test/                         # 集成测试（Issue 11）
+│   ├── test_framework.h         # C 单测框架（断言、统计）
+│   ├── test_integration.c       # Lexer+Parser 端到端测试
+│   └── test_roundtrip.c         # Round-trip 验证（parse→print→parse）
+├── examples/                     # 示例与烟雾测试
+│   ├── sample.js                # 含注释、错误的复杂样本
+│   ├── mini.js                  # 简单变量声明
+│   ├── bad.js                   # 未闭合字符串（L1 容错）
+│   └── badblock.js              # 未闭合块注释（L1 容错）
+├── Makefile                      # C11 编译配置，产物归拢到 build/
+├── .gitignore                    # 忽略 build/ 本地编译产物
+└── issues/                       # 设计文档（本清单与各 Issue）
+    ├── 00-完整Issue清单与执行计划.md
+    ├── 01-产品愿景与范围基线.md
+    ├── 02-词法分析与错误恢复-Lexer.md
+    ├── 03-语法解析与ESTree-AST结构.md
+    ├── 04-作用域分析与符号表-ScopeManager.md
+    ├── 05-AST编辑与不可变操作API.md
+    ├── 06-代码生成与SourceMap-格式化集成.md
+    ├── 07-控制流-数据流图构建.md
+    ├── 08-CLI-SDK与插件扩展接口.md
+    ├── 09-质量与基准测试护栏.md
+    ├── 10-增量编辑与Diff算法.md
+    ├── 11-集成测试与模块边界规范.md
+    ├── 12-ESTree-AST语法完整性矩阵.md
+    └── 13-作用域分析细化实现规范.md
+```
+
+### 构建与测试命令
+```bash
+# 编译 CLI 工具
+make
+
+# 运行所有集成测试
+make test
+
+# 清理构建产物
+make clean
+
+# 快速测试 CLI
+./build/quickjsflow lex examples/sample.js
+./build/quickjsflow parse examples/mini.js
+```
+
+### 模块职责与依赖
+| 模块 | 文件 | 职责 | 依赖 |
+|------|------|------|------|
+| **Lexer** | lexer.{c,h} | Token 流生成，L1 容错 | 无 |
+| **Parser** | parser.{c,h}, ast.h, ast_print.c | AST 构建，Stage-1 语法，JSON 输出 | Lexer |
+| **CLI** | main.c | `lex` 和 `parse` 命令 | Lexer, Parser |
+| **Test** | test/*.c | Lexer+Parser 端到端与 Round-trip 验证 | Lexer, Parser |
+| **ScopeManager** | scope.{c,h} (待实现) | 作用域链与符号表（Issue 04） | Parser |
+| **Edit API** | edit.{c,h} (待实现) | 不可变编辑操作（Issue 05） | ScopeManager |
+| **Codegen** | codegen.{c,h} (待实现) | AST→源码与 SourceMap（Issue 06） | Parser, Edit API |
+
 ## 🗺️ 路线图与里程碑（建议）
 - Sprint 1（Week 1）：Issue 01, 12, 13（愿景/语法矩阵/作用域规范）
-- Sprint 2（Week 2）：Issue 02, 03（Lexer/Parser 初版 + 基础测试）
+- Sprint 2（Week 2）：Issue 02, 03（Lexer/Parser 初版 + 基础测试）✅ 完成
 - Sprint 3（Week 3）：Issue 04, 05（ScopeManager + 编辑 API）
 - Sprint 4（Week 4）：Issue 06, 08, 11, 09（Codegen、CLI/SDK、集成测试、质量护栏）
 - Phase 2（MVP 后）：Issue 10, 07（增量编辑、CFG 可选）
@@ -35,15 +104,15 @@
 - CI 全绿、≥80% 覆盖率、性能基线报告产出
 
 ## 📌 任务清单（子 Issue，可直接作为 GitHub 子任务）
-- [ ] 01-产品愿景与范围基线（定义目标、容错、编辑原子操作）
-- [ ] 12-ESTree-AST 语法完整性矩阵（阶段划分与覆盖）
-- [ ] 13-作用域分析细化实现规范（规则与算法）
-- [ ] 02-词法分析与错误恢复-Lexer（TokenStream + L1 容错）
-- [ ] 03-语法解析与ESTree-AST结构（阶段1语法 + 注释挂载 + L2 容错）
+- [x] 01-产品愿景与范围基线（定义目标、容错、编辑原子操作）✅ 完成
+- [x] 12-ESTree-AST 语法完整性矩阵（阶段划分与覆盖）✅ 完成
+- [x] 13-作用域分析细化实现规范（规则与算法）✅ 完成
+- [x] 02-词法分析与错误恢复-Lexer（TokenStream + L1 容错）✅ 完成
+- [x] 03-语法解析与ESTree-AST结构（阶段1语法 + 注释挂载 + L2 容错）✅ 完成
+- [x] 11-集成测试与模块边界规范（契约定义 + Round-trip）✅ 完成（基础框架）
 - [ ] 04-作用域分析与符号表-ScopeManager（绑定/引用/遮蔽/TDZ）
 - [ ] 05-AST编辑与不可变操作API（不可变 + 作用域感知）
 - [ ] 06-代码生成与SourceMap-格式化集成（注释还原 + SourceMap）
-- [ ] 11-集成测试与模块边界规范（契约定义 + Round-trip）
 - [ ] 08-CLI-SDK与插件扩展接口（基础命令 + SDK）
 - [ ] 09-质量与基准测试护栏（CI/覆盖率/基准）
 - [ ] 10-增量编辑与Diff算法（Phase 2）

@@ -11,6 +11,15 @@
 - 依赖：Issue 02（Lexer）、Issue 12（语法矩阵）
 - 目标版本：v0.1.0（MVP）
 
+## 📁 项目结构与开发环境
+
+参考根目录 [issues/00-完整Issue清单与执行计划.md](00-完整Issue清单与执行计划.md) 的**项目结构**与**构建与测试命令**章节。关键路径：
+- 源码：`src/parser.c`, `include/quickjsflow/parser.h`, `src/ast_print.c`, `include/quickjsflow/ast.h`
+- 测试：`test/test_integration.c`, `test/test_roundtrip.c`
+- 示例：`examples/` 目录含各种 JS 样本
+- 构建：`make` 编译，`make test` 运行端到端测试
+- 命令：`./build/quickjsflow parse <file>` 查看 AST JSON 输出
+
 ## 技术要点
 
 ### 1. 解析架构

@@ -4,6 +4,15 @@
 明确定义支持的 ECMAScript 语法子集和分阶段实现路线，避免散乱实现。
 本文档是语法范围的**规范性参考**，确保解析器逐步达成覆盖目标。
 
+## 📁 项目结构与开发环境
+
+参考根目录 [00-完整Issue清单与执行计划.md](00-完整Issue清单与执行计划.md) 的**项目结构**与**构建与测试命令**章节。关键路径：
+- 源码：`src/parser.c`, `src/ast_print.c`, `include/quickjsflow/ast.h`
+- 测试：`test/test_integration.c`（验证语法覆盖）
+- 构建：`make && make test` 运行集成测试
+
+**本文档作用**：指导 Parser（Issue 03）与后续语法扩展的实现优先级。
+
 ## 技术要点
 
 ### 分阶段实现路线

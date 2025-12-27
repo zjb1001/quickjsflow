@@ -13,6 +13,17 @@
 - 依赖：Issue 06（Codegen）、Issue 05（Edit API）
 - 目标版本：v0.1.0（MVP）
 
+## 📁 项目结构与开发环境
+
+参考根目录 [issues/00-完整Issue清单与执行计划.md](00-完整Issue清单与执行计划.md) 的**项目结构**与**构建与测试命令**章节。关键路径：
+- 源码：`src/main.c`（CLI 入口，已有 `lex`, `parse` 命令）
+- API 头文件：`include/quickjsflow/` 各模块的 .h 文件
+- 测试：`test/` 框架已就位
+- 当前命令：`./build/quickjsflow lex|parse <file>`
+- 构建：`make`，`make test`
+- 扩展准备：等待后续模块（Scope, Edit, Codegen）完成
+
+
 ## 技术要点
 
 ### 1. CLI 设计
