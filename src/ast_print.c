@@ -16,8 +16,22 @@ static char *dupstr(const char *s) {
 static void print_escaped(const char *s) {
     if (!s) return;
     for (const char *p = s; *p; ++p) {
-        if (*p == '"' || *p == '\\') putchar('\\');
-        putchar(*p);
+        switch (*p) {
+            case '"': printf("\\\""); break;
+            case '\\': printf("\\\\"); break;
+            case '\n': printf("\\n"); break;
+            case '\r': printf("\\r"); break;
+            case '\t': printf("\\t"); break;
+            case '\b': printf("\\b"); break;
+            case '\f': printf("\\f"); break;
+            default:
+                if (*p < 32 || *p == 127) {
+                    printf("\\u%04x", (unsigned char)*p);
+                } else {
+                    putchar(*p);
+                }
+                break;
+        }
     }
 }
 
@@ -408,6 +422,176 @@ AstNode *ast_export_default_declaration(Position s, Position e) {
     return n;
 }
 
+// Phase 2: Modern Features (ES6+)
+
+AstNode *ast_arrow_function_expression(int is_async, Position s, Position e) {
+    AstNode *n = new_node(AST_ArrowFunctionExpression);
+    ArrowFunctionExpression *afe = (ArrowFunctionExpression *)calloc(1, sizeof(ArrowFunctionExpression));
+    astvec_init(&afe->params);
+    afe->body = NULL;
+    afe->is_async = is_async;
+    n->data = afe;
+    n->start = s; n->end = e;
+    return n;
+}
+
+AstNode *ast_template_literal(Position s, Position e) {
+    AstNode *n = new_node(AST_TemplateLiteral);
+    TemplateLiteral *tl = (TemplateLiteral *)calloc(1, sizeof(TemplateLiteral));
+    astvec_init(&tl->quasis);
+    astvec_init(&tl->expressions);
+    n->data = tl;
+    n->start = s; n->end = e;
+    return n;
+}
+
+AstNode *ast_template_element(const char *value, int tail, Position s, Position e) {
+    AstNode *n = new_node(AST_TemplateElement);
+    TemplateElement *te = (TemplateElement *)calloc(1, sizeof(TemplateElement));
+    te->value = dupstr(value);
+    te->tail = tail;
+    n->data = te;
+    n->start = s; n->end = e;
+    return n;
+}
+
+AstNode *ast_spread_element(AstNode *argument, Position s, Position e) {
+    AstNode *n = new_node(AST_SpreadElement);
+    SpreadElement *se = (SpreadElement *)calloc(1, sizeof(SpreadElement));
+    se->argument = argument;
+    n->data = se;
+    n->start = s; n->end = e;
+    return n;
+}
+
+AstNode *ast_object_pattern(Position s, Position e) {
+    AstNode *n = new_node(AST_ObjectPattern);
+    ObjectPattern *op = (ObjectPattern *)calloc(1, sizeof(ObjectPattern));
+    astvec_init(&op->properties);
+    n->data = op;
+    n->start = s; n->end = e;
+    return n;
+}
+
+AstNode *ast_array_pattern(Position s, Position e) {
+    AstNode *n = new_node(AST_ArrayPattern);
+    ArrayPattern *ap = (ArrayPattern *)calloc(1, sizeof(ArrayPattern));
+    astvec_init(&ap->elements);
+    n->data = ap;
+    n->start = s; n->end = e;
+    return n;
+}
+
+AstNode *ast_assignment_pattern(AstNode *left, AstNode *right, Position s, Position e) {
+    AstNode *n = new_node(AST_AssignmentPattern);
+    AssignmentPattern *ap = (AssignmentPattern *)calloc(1, sizeof(AssignmentPattern));
+    ap->left = left;
+    ap->right = right;
+    n->data = ap;
+    n->start = s; n->end = e;
+    return n;
+}
+
+AstNode *ast_rest_element(AstNode *argument, Position s, Position e) {
+    AstNode *n = new_node(AST_RestElement);
+    RestElement *re = (RestElement *)calloc(1, sizeof(RestElement));
+    re->argument = argument;
+    n->data = re;
+    n->start = s; n->end = e;
+    return n;
+}
+
+AstNode *ast_for_of_statement(AstNode *left, AstNode *right, AstNode *body, Position s, Position e) {
+    AstNode *n = new_node(AST_ForOfStatement);
+    ForOfStatement *fos = (ForOfStatement *)calloc(1, sizeof(ForOfStatement));
+    fos->left = left;
+    fos->right = right;
+    fos->body = body;
+    n->data = fos;
+    n->start = s; n->end = e;
+    return n;
+}
+
+AstNode *ast_for_in_statement(AstNode *left, AstNode *right, AstNode *body, Position s, Position e) {
+    AstNode *n = new_node(AST_ForInStatement);
+    ForInStatement *fis = (ForInStatement *)calloc(1, sizeof(ForInStatement));
+    fis->left = left;
+    fis->right = right;
+    fis->body = body;
+    n->data = fis;
+    n->start = s; n->end = e;
+    return n;
+}
+
+AstNode *ast_class_declaration(AstNode *id, AstNode *superClass, Position s, Position e) {
+    AstNode *n = new_node(AST_ClassDeclaration);
+    ClassDeclaration *cd = (ClassDeclaration *)calloc(1, sizeof(ClassDeclaration));
+    cd->id = id;
+    cd->superClass = superClass;
+    astvec_init(&cd->body);
+    n->data = cd;
+    n->start = s; n->end = e;
+    return n;
+}
+
+AstNode *ast_class_expression(AstNode *id, AstNode *superClass, Position s, Position e) {
+    AstNode *n = new_node(AST_ClassExpression);
+    ClassExpression *ce = (ClassExpression *)calloc(1, sizeof(ClassExpression));
+    ce->id = id;
+    ce->superClass = superClass;
+    astvec_init(&ce->body);
+    n->data = ce;
+    n->start = s; n->end = e;
+    return n;
+}
+
+AstNode *ast_method_definition(AstNode *key, AstNode *value, const char *kind, int is_static, Position s, Position e) {
+    AstNode *n = new_node(AST_MethodDefinition);
+    MethodDefinition *md = (MethodDefinition *)calloc(1, sizeof(MethodDefinition));
+    md->key = key;
+    md->value = value;
+    md->kind = dupstr(kind);
+    md->is_static = is_static;
+    n->data = md;
+    n->start = s; n->end = e;
+    return n;
+}
+
+AstNode *ast_await_expression(AstNode *argument, Position s, Position e) {
+    AstNode *n = new_node(AST_AwaitExpression);
+    AwaitExpression *ae = (AwaitExpression *)calloc(1, sizeof(AwaitExpression));
+    ae->argument = argument;
+    n->data = ae;
+    n->start = s; n->end = e;
+    return n;
+}
+
+AstNode *ast_yield_expression(AstNode *argument, int delegate, Position s, Position e) {
+    AstNode *n = new_node(AST_YieldExpression);
+    YieldExpression *ye = (YieldExpression *)calloc(1, sizeof(YieldExpression));
+    ye->argument = argument;
+    ye->delegate = delegate;
+    n->data = ye;
+    n->start = s; n->end = e;
+    return n;
+}
+
+AstNode *ast_super(Position s, Position e) {
+    AstNode *n = new_node(AST_Super);
+    Super *sup = (Super *)calloc(1, sizeof(Super));
+    n->data = sup;
+    n->start = s; n->end = e;
+    return n;
+}
+
+AstNode *ast_this_expression(Position s, Position e) {
+    AstNode *n = new_node(AST_ThisExpression);
+    ThisExpression *te = (ThisExpression *)calloc(1, sizeof(ThisExpression));
+    n->data = te;
+    n->start = s; n->end = e;
+    return n;
+}
+
 AstNode *ast_error(const char *msg, Position s, Position e) {
     AstNode *n = new_node(AST_Error);
     ErrorNode *er = (ErrorNode *)calloc(1, sizeof(ErrorNode));
@@ -657,6 +841,92 @@ static void print_export_default_declaration(const ExportDefaultDeclaration *edd
     printf(",\"expression\":"); if (edd->expression) print_node(edd->expression); else printf("null");
 }
 
+// Phase 2: Modern Feature Print Functions
+static void print_arrow_function_expression(const ArrowFunctionExpression *afe) {
+    printf("\"async\":%s", afe->is_async ? "true" : "false");
+    printf(",\"params\":[");
+    for (size_t i = 0; i < afe->params.count; ++i) {
+        if (i) printf(",");
+        print_node(afe->params.items[i]);
+    }
+    printf("],\"body\":");
+    if (afe->body) print_node(afe->body); else printf("null");
+}
+
+static void print_template_literal(const TemplateLiteral *tl) {
+    printf("\"quasis\":[");
+    for (size_t i = 0; i < tl->quasis.count; ++i) {
+        if (i) printf(",");
+        print_node(tl->quasis.items[i]);
+    }
+    printf("],\"expressions\":[");
+    for (size_t i = 0; i < tl->expressions.count; ++i) {
+        if (i) printf(",");
+        print_node(tl->expressions.items[i]);
+    }
+    printf("]");
+}
+
+static void print_template_element(const TemplateElement *te) {
+    printf("\"value\":{\"raw\":\""); print_escaped(te->value); printf("\"}");
+    printf(",\"tail\":%s", te->tail ? "true" : "false");
+}
+
+static void print_spread_element(const SpreadElement *se) {
+    printf("\"argument\":"); if (se->argument) print_node(se->argument); else printf("null");
+}
+
+static void print_rest_element(const RestElement *re) {
+    printf("\"argument\":"); if (re->argument) print_node(re->argument); else printf("null");
+}
+
+static void print_for_of_statement(const ForOfStatement *fos) {
+    printf("\"left\":"); if (fos->left) print_node(fos->left); else printf("null");
+    printf(",\"right\":"); if (fos->right) print_node(fos->right); else printf("null");
+    printf(",\"body\":"); if (fos->body) print_node(fos->body); else printf("null");
+    printf(",\"await\":false"); // TODO: Add await support if needed
+}
+
+static void print_for_in_statement(const ForInStatement *fis) {
+    printf("\"left\":"); if (fis->left) print_node(fis->left); else printf("null");
+    printf(",\"right\":"); if (fis->right) print_node(fis->right); else printf("null");
+    printf(",\"body\":"); if (fis->body) print_node(fis->body); else printf("null");
+}
+
+static void print_class_declaration(const ClassDeclaration *cd) {
+    printf("\"id\":"); if (cd->id) print_node(cd->id); else printf("null");
+    printf(",\"superClass\":"); if (cd->superClass) print_node(cd->superClass); else printf("null");
+    printf(",\"body\":{\"type\":\"ClassBody\",\"body\":[");
+    for (size_t i = 0; i < cd->body.count; ++i) {
+        if (i) printf(",");
+        print_node(cd->body.items[i]);
+    }
+    printf("]}");
+}
+
+static void print_class_expression(const ClassExpression *ce) {
+    printf("\"id\":"); if (ce->id) print_node(ce->id); else printf("null");
+    printf(",\"superClass\":"); if (ce->superClass) print_node(ce->superClass); else printf("null");
+    printf(",\"body\":{\"type\":\"ClassBody\",\"body\":[");
+    for (size_t i = 0; i < ce->body.count; ++i) {
+        if (i) printf(",");
+        print_node(ce->body.items[i]);
+    }
+    printf("]}");
+}
+
+static void print_method_definition(const MethodDefinition *md) {
+    printf("\"kind\":\"");
+    if (md->kind) {
+        print_escaped(md->kind);
+    } else {
+        printf("method");
+    }
+    printf("\",\"key\":"); if (md->key) print_node(md->key); else printf("null");
+    printf(",\"value\":"); if (md->value) print_node(md->value); else printf("null");
+    printf(",\"static\":%s", md->is_static ? "true" : "false");
+}
+
 static void print_error(const ErrorNode *er) {
     printf("\"message\":\""); print_escaped(er->message); printf("\"");
 }
@@ -701,6 +971,24 @@ static void print_node(const AstNode *n) {
         case AST_ExportNamedDeclaration: type = "ExportNamedDeclaration"; break;
         case AST_ExportDefaultDeclaration: type = "ExportDefaultDeclaration"; break;
         case AST_Error: type = "Error"; break;
+        // Phase 2: Modern Features
+        case AST_ArrowFunctionExpression: type = "ArrowFunctionExpression"; break;
+        case AST_TemplateLiteral: type = "TemplateLiteral"; break;
+        case AST_TemplateElement: type = "TemplateElement"; break;
+        case AST_SpreadElement: type = "SpreadElement"; break;
+        case AST_ObjectPattern: type = "ObjectPattern"; break;
+        case AST_ArrayPattern: type = "ArrayPattern"; break;
+        case AST_AssignmentPattern: type = "AssignmentPattern"; break;
+        case AST_RestElement: type = "RestElement"; break;
+        case AST_ForOfStatement: type = "ForOfStatement"; break;
+        case AST_ForInStatement: type = "ForInStatement"; break;
+        case AST_ClassDeclaration: type = "ClassDeclaration"; break;
+        case AST_ClassExpression: type = "ClassExpression"; break;
+        case AST_MethodDefinition: type = "MethodDefinition"; break;
+        case AST_AwaitExpression: type = "AwaitExpression"; break;
+        case AST_YieldExpression: type = "YieldExpression"; break;
+        case AST_Super: type = "Super"; break;
+        case AST_ThisExpression: type = "ThisExpression"; break;
         default: break;
     }
     printf("\"type\":\"%s\",", type);
@@ -744,6 +1032,24 @@ static void print_node(const AstNode *n) {
         case AST_ExportNamedDeclaration: print_export_named_declaration((const ExportNamedDeclaration *)n->data); break;
         case AST_ExportDefaultDeclaration: print_export_default_declaration((const ExportDefaultDeclaration *)n->data); break;
         case AST_Error: print_error((const ErrorNode *)n->data); break;
+        // Phase 2: Modern Features
+        case AST_ArrowFunctionExpression: print_arrow_function_expression((const ArrowFunctionExpression *)n->data); break;
+        case AST_TemplateLiteral: print_template_literal((const TemplateLiteral *)n->data); break;
+        case AST_TemplateElement: print_template_element((const TemplateElement *)n->data); break;
+        case AST_SpreadElement: print_spread_element((const SpreadElement *)n->data); break;
+        case AST_RestElement: print_rest_element((const RestElement *)n->data); break;
+        case AST_ForOfStatement: print_for_of_statement((const ForOfStatement *)n->data); break;
+        case AST_ForInStatement: print_for_in_statement((const ForInStatement *)n->data); break;
+        case AST_ClassDeclaration: print_class_declaration((const ClassDeclaration *)n->data); break;
+        case AST_ClassExpression: print_class_expression((const ClassExpression *)n->data); break;
+        case AST_MethodDefinition: print_method_definition((const MethodDefinition *)n->data); break;
+        case AST_AwaitExpression:
+        case AST_YieldExpression: printf("\"argument\":null"); break;
+        case AST_Super:
+        case AST_ThisExpression: break; // No additional fields
+        case AST_ObjectPattern:
+        case AST_ArrayPattern:
+        case AST_AssignmentPattern: break; // TODO: Implement if needed
         default: break;
     }
     printf("}");
@@ -1147,6 +1453,188 @@ static AstNode *clone_node(const AstNode *n) {
             c->data = ced;
             break;
         }
+        // Phase 2: Modern Features
+        case AST_ArrowFunctionExpression: {
+            ArrowFunctionExpression *afe = (ArrowFunctionExpression *)n->data;
+            ArrowFunctionExpression *cafe = (ArrowFunctionExpression *)calloc(1, sizeof(ArrowFunctionExpression));
+            astvec_init(&cafe->params);
+            if (afe) {
+                cafe->is_async = afe->is_async;
+                for (size_t i = 0; i < afe->params.count; ++i) {
+                    astvec_push(&cafe->params, clone_node(afe->params.items[i]));
+                }
+                cafe->body = clone_node(afe->body);
+            }
+            c->data = cafe;
+            break;
+        }
+        case AST_TemplateLiteral: {
+            TemplateLiteral *tl = (TemplateLiteral *)n->data;
+            TemplateLiteral *ctl = (TemplateLiteral *)calloc(1, sizeof(TemplateLiteral));
+            astvec_init(&ctl->quasis);
+            astvec_init(&ctl->expressions);
+            if (tl) {
+                for (size_t i = 0; i < tl->quasis.count; ++i) {
+                    astvec_push(&ctl->quasis, clone_node(tl->quasis.items[i]));
+                }
+                for (size_t i = 0; i < tl->expressions.count; ++i) {
+                    astvec_push(&ctl->expressions, clone_node(tl->expressions.items[i]));
+                }
+            }
+            c->data = ctl;
+            break;
+        }
+        case AST_TemplateElement: {
+            TemplateElement *te = (TemplateElement *)n->data;
+            TemplateElement *cte = (TemplateElement *)calloc(1, sizeof(TemplateElement));
+            if (te) {
+                cte->value = dupstr(te->value);
+                cte->tail = te->tail;
+            }
+            c->data = cte;
+            break;
+        }
+        case AST_SpreadElement: {
+            SpreadElement *se = (SpreadElement *)n->data;
+            SpreadElement *cse = (SpreadElement *)calloc(1, sizeof(SpreadElement));
+            if (se) cse->argument = clone_node(se->argument);
+            c->data = cse;
+            break;
+        }
+        case AST_ObjectPattern: {
+            ObjectPattern *op = (ObjectPattern *)n->data;
+            ObjectPattern *cop = (ObjectPattern *)calloc(1, sizeof(ObjectPattern));
+            astvec_init(&cop->properties);
+            if (op) {
+                for (size_t i = 0; i < op->properties.count; ++i) {
+                    astvec_push(&cop->properties, clone_node(op->properties.items[i]));
+                }
+            }
+            c->data = cop;
+            break;
+        }
+        case AST_ArrayPattern: {
+            ArrayPattern *ap = (ArrayPattern *)n->data;
+            ArrayPattern *cap = (ArrayPattern *)calloc(1, sizeof(ArrayPattern));
+            astvec_init(&cap->elements);
+            if (ap) {
+                for (size_t i = 0; i < ap->elements.count; ++i) {
+                    astvec_push(&cap->elements, clone_node(ap->elements.items[i]));
+                }
+            }
+            c->data = cap;
+            break;
+        }
+        case AST_AssignmentPattern: {
+            AssignmentPattern *ap = (AssignmentPattern *)n->data;
+            AssignmentPattern *cap = (AssignmentPattern *)calloc(1, sizeof(AssignmentPattern));
+            if (ap) {
+                cap->left = clone_node(ap->left);
+                cap->right = clone_node(ap->right);
+            }
+            c->data = cap;
+            break;
+        }
+        case AST_RestElement: {
+            RestElement *re = (RestElement *)n->data;
+            RestElement *cre = (RestElement *)calloc(1, sizeof(RestElement));
+            if (re) cre->argument = clone_node(re->argument);
+            c->data = cre;
+            break;
+        }
+        case AST_ForOfStatement: {
+            ForOfStatement *fos = (ForOfStatement *)n->data;
+            ForOfStatement *cfos = (ForOfStatement *)calloc(1, sizeof(ForOfStatement));
+            if (fos) {
+                cfos->left = clone_node(fos->left);
+                cfos->right = clone_node(fos->right);
+                cfos->body = clone_node(fos->body);
+            }
+            c->data = cfos;
+            break;
+        }
+        case AST_ForInStatement: {
+            ForInStatement *fis = (ForInStatement *)n->data;
+            ForInStatement *cfis = (ForInStatement *)calloc(1, sizeof(ForInStatement));
+            if (fis) {
+                cfis->left = clone_node(fis->left);
+                cfis->right = clone_node(fis->right);
+                cfis->body = clone_node(fis->body);
+            }
+            c->data = cfis;
+            break;
+        }
+        case AST_ClassDeclaration: {
+            ClassDeclaration *cd = (ClassDeclaration *)n->data;
+            ClassDeclaration *ccd = (ClassDeclaration *)calloc(1, sizeof(ClassDeclaration));
+            astvec_init(&ccd->body);
+            if (cd) {
+                ccd->id = clone_node(cd->id);
+                ccd->superClass = clone_node(cd->superClass);
+                for (size_t i = 0; i < cd->body.count; ++i) {
+                    astvec_push(&ccd->body, clone_node(cd->body.items[i]));
+                }
+            }
+            c->data = ccd;
+            break;
+        }
+        case AST_ClassExpression: {
+            ClassExpression *ce = (ClassExpression *)n->data;
+            ClassExpression *cce = (ClassExpression *)calloc(1, sizeof(ClassExpression));
+            astvec_init(&cce->body);
+            if (ce) {
+                cce->id = clone_node(ce->id);
+                cce->superClass = clone_node(ce->superClass);
+                for (size_t i = 0; i < ce->body.count; ++i) {
+                    astvec_push(&cce->body, clone_node(ce->body.items[i]));
+                }
+            }
+            c->data = cce;
+            break;
+        }
+        case AST_MethodDefinition: {
+            MethodDefinition *md = (MethodDefinition *)n->data;
+            MethodDefinition *cmd = (MethodDefinition *)calloc(1, sizeof(MethodDefinition));
+            if (md) {
+                cmd->key = clone_node(md->key);
+                cmd->value = clone_node(md->value);
+                cmd->kind = dupstr(md->kind);
+                cmd->is_static = md->is_static;
+            }
+            c->data = cmd;
+            break;
+        }
+        case AST_AwaitExpression: {
+            AwaitExpression *ae = (AwaitExpression *)n->data;
+            AwaitExpression *cae = (AwaitExpression *)calloc(1, sizeof(AwaitExpression));
+            if (ae) cae->argument = clone_node(ae->argument);
+            c->data = cae;
+            break;
+        }
+        case AST_YieldExpression: {
+            YieldExpression *ye = (YieldExpression *)n->data;
+            YieldExpression *cye = (YieldExpression *)calloc(1, sizeof(YieldExpression));
+            if (ye) {
+                cye->argument = clone_node(ye->argument);
+                cye->delegate = ye->delegate;
+            }
+            c->data = cye;
+            break;
+        }
+        case AST_Super: {
+            Super *sup = (Super *)n->data;
+            Super *csup = (Super *)calloc(1, sizeof(Super));
+            if (sup) csup->unused = sup->unused;
+            c->data = csup;
+            break;
+        }
+        case AST_ThisExpression: {
+            ThisExpression *te = (ThisExpression *)n->data;
+            ThisExpression *cte = (ThisExpression *)calloc(1, sizeof(ThisExpression));
+            if (te) cte->unused = te->unused;
+            c->data = cte;
+            break;
+        }
         case AST_Error: {
             ErrorNode *er = (ErrorNode *)n->data;
             ErrorNode *cer = (ErrorNode *)calloc(1, sizeof(ErrorNode));
@@ -1247,6 +1735,48 @@ static void free_export_named(ExportNamedDeclaration *end) {
     ast_release(end->declaration); free(end);
 }
 static void free_export_default(ExportDefaultDeclaration *edd) { ast_release(edd->declaration); ast_release(edd->expression); free(edd); }
+// Phase 2: Modern Features
+static void free_arrow_func(ArrowFunctionExpression *afe) {
+    for (size_t i = 0; i < afe->params.count; ++i) ast_release(afe->params.items[i]);
+    free(afe->params.items);
+    ast_release(afe->body); free(afe);
+}
+static void free_template_lit(TemplateLiteral *tl) {
+    for (size_t i = 0; i < tl->quasis.count; ++i) ast_release(tl->quasis.items[i]);
+    free(tl->quasis.items);
+    for (size_t i = 0; i < tl->expressions.count; ++i) ast_release(tl->expressions.items[i]);
+    free(tl->expressions.items);
+    free(tl);
+}
+static void free_template_elem(TemplateElement *te) { free(te->value); free(te); }
+static void free_spread_elem(SpreadElement *se) { ast_release(se->argument); free(se); }
+static void free_object_pattern(ObjectPattern *op) {
+    for (size_t i = 0; i < op->properties.count; ++i) ast_release(op->properties.items[i]);
+    free(op->properties.items); free(op);
+}
+static void free_array_pattern(ArrayPattern *ap) {
+    for (size_t i = 0; i < ap->elements.count; ++i) ast_release(ap->elements.items[i]);
+    free(ap->elements.items); free(ap);
+}
+static void free_assign_pattern(AssignmentPattern *ap) { ast_release(ap->left); ast_release(ap->right); free(ap); }
+static void free_rest_elem(RestElement *re) { ast_release(re->argument); free(re); }
+static void free_for_of_stmt(ForOfStatement *fos) { ast_release(fos->left); ast_release(fos->right); ast_release(fos->body); free(fos); }
+static void free_for_in_stmt(ForInStatement *fis) { ast_release(fis->left); ast_release(fis->right); ast_release(fis->body); free(fis); }
+static void free_class_decl(ClassDeclaration *cd) {
+    ast_release(cd->id); ast_release(cd->superClass);
+    for (size_t i = 0; i < cd->body.count; ++i) ast_release(cd->body.items[i]);
+    free(cd->body.items); free(cd);
+}
+static void free_class_expr(ClassExpression *ce) {
+    ast_release(ce->id); ast_release(ce->superClass);
+    for (size_t i = 0; i < ce->body.count; ++i) ast_release(ce->body.items[i]);
+    free(ce->body.items); free(ce);
+}
+static void free_method_def(MethodDefinition *md) { ast_release(md->key); ast_release(md->value); free(md->kind); free(md); }
+static void free_await_expr(AwaitExpression *ae) { ast_release(ae->argument); free(ae); }
+static void free_yield_expr(YieldExpression *ye) { ast_release(ye->argument); free(ye); }
+static void free_super(Super *sup) { free(sup); }
+static void free_this_expr(ThisExpression *te) { free(te); }
 static void free_error(ErrorNode *er) { /*free(er->message);*/ free(er); }
 
 static void free_node(AstNode *n) {
@@ -1260,8 +1790,7 @@ static void free_node(AstNode *n) {
         case AST_ExpressionStatement: free_exprstmt((ExpressionStatement *)n->data); break;
         case AST_UpdateExpression: free_update((UpdateExpression *)n->data); break;
         case AST_BinaryExpression: free_binary((BinaryExpression *)n->data); break;
-        case AST_Error: free_error((ErrorNode *)n->data); break;
-            case AST_AssignmentExpression: free_assignment((AssignmentExpression *)n->data); break;
+        case AST_AssignmentExpression: free_assignment((AssignmentExpression *)n->data); break;
             case AST_UnaryExpression: free_unary((UnaryExpression *)n->data); break;
             case AST_ObjectExpression: free_object_expr((ObjectExpression *)n->data); break;
             case AST_Property: free_property((Property *)n->data); break;
@@ -1287,7 +1816,24 @@ static void free_node(AstNode *n) {
             case AST_ImportSpecifier: free_import_spec((ImportSpecifier *)n->data); break;
             case AST_ExportNamedDeclaration: free_export_named((ExportNamedDeclaration *)n->data); break;
             case AST_ExportDefaultDeclaration: free_export_default((ExportDefaultDeclaration *)n->data); break;
-        default: break;
+            case AST_ArrowFunctionExpression: free_arrow_func((ArrowFunctionExpression *)n->data); break;
+            case AST_TemplateLiteral: free_template_lit((TemplateLiteral *)n->data); break;
+            case AST_TemplateElement: free_template_elem((TemplateElement *)n->data); break;
+            case AST_SpreadElement: free_spread_elem((SpreadElement *)n->data); break;
+            case AST_ObjectPattern: free_object_pattern((ObjectPattern *)n->data); break;
+            case AST_ArrayPattern: free_array_pattern((ArrayPattern *)n->data); break;
+            case AST_AssignmentPattern: free_assign_pattern((AssignmentPattern *)n->data); break;
+            case AST_RestElement: free_rest_elem((RestElement *)n->data); break;
+            case AST_ForOfStatement: free_for_of_stmt((ForOfStatement *)n->data); break;
+            case AST_ForInStatement: free_for_in_stmt((ForInStatement *)n->data); break;
+            case AST_ClassDeclaration: free_class_decl((ClassDeclaration *)n->data); break;
+            case AST_ClassExpression: free_class_expr((ClassExpression *)n->data); break;
+            case AST_MethodDefinition: free_method_def((MethodDefinition *)n->data); break;
+            case AST_AwaitExpression: free_await_expr((AwaitExpression *)n->data); break;
+            case AST_YieldExpression: free_yield_expr((YieldExpression *)n->data); break;
+            case AST_Super: free_super((Super *)n->data); break;
+            case AST_ThisExpression: free_this_expr((ThisExpression *)n->data); break;
+        case AST_Error: free_error((ErrorNode *)n->data); break;
     }
     free(n);
 }

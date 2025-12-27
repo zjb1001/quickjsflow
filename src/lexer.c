@@ -136,6 +136,32 @@ static Token read_string(Lexer *lx, char quote) {
     return make_token(lx, TOKEN_STRING, sl, sc, lx->line, lx->col, start, end);
 }
 
+static Token read_template(Lexer *lx) {
+    int sl = lx->line, sc = lx->col;
+    size_t start = lx->pos;
+    advance(lx); // opening backtick
+    int closed = 0;
+    while (current_char(lx) != '\0') {
+        char c = current_char(lx);
+        if (c == '\\') {
+            advance(lx);
+            if (current_char(lx) != '\0') advance(lx);
+            continue;
+        }
+        if (c == '`') {
+            advance(lx);
+            closed = 1;
+            break;
+        }
+        advance(lx);
+    }
+    size_t end = lx->pos;
+    if (!closed) {
+        return make_error_token(lx, "UnterminatedTemplate", sl, sc, lx->line, lx->col, start, end);
+    }
+    return make_token(lx, TOKEN_TEMPLATE, sl, sc, lx->line, lx->col, start, end);
+}
+
 static Token read_number(Lexer *lx) {
     int sl = lx->line, sc = lx->col;
     size_t start = lx->pos;
@@ -176,6 +202,21 @@ static Token read_punctuator(Lexer *lx) {
     if (c == '/' && n == '*') {
         return read_block_comment(lx);
     }
+    // handle arrow function =>
+    if (c == '=' && n == '>') {
+        advance(lx);
+        advance(lx);
+        size_t end2 = lx->pos;
+        return make_token(lx, TOKEN_PUNCTUATOR, sl, sc, lx->line, lx->col, start, end2);
+    }
+    // handle spread/rest ...
+    if (c == '.' && n == '.' && lx->pos + 2 < lx->length && lx->input[lx->pos + 2] == '.') {
+        advance(lx);
+        advance(lx);
+        advance(lx);
+        size_t end3 = lx->pos;
+        return make_token(lx, TOKEN_PUNCTUATOR, sl, sc, lx->line, lx->col, start, end3);
+    }
     // handle a few common two-char punctuators
     if ((c == '=' && n == '=') || (c == '!' && n == '=') || (c == '<' && n == '=') || (c == '>' && n == '=') ||
         (c == '+' && n == '+') || (c == '-' && n == '-') || (c == '&' && n == '&') || (c == '|' && n == '|')) {
@@ -206,6 +247,9 @@ Token lexer_next(Lexer *lx) {
     }
     if (c == '\'' || c == '"') {
         return read_string(lx, c);
+    }
+    if (c == '`') {
+        return read_template(lx);
     }
     if (is_ident_start(c)) {
         return read_identifier_or_keyword(lx);

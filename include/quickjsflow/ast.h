@@ -39,6 +39,26 @@ typedef enum {
     AST_ImportSpecifier,
     AST_ExportNamedDeclaration,
     AST_ExportDefaultDeclaration,
+    
+    // Phase 2: Modern Features (ES6+)
+    AST_ArrowFunctionExpression,
+    AST_TemplateLiteral,
+    AST_TemplateElement,
+    AST_SpreadElement,
+    AST_ObjectPattern,
+    AST_ArrayPattern,
+    AST_AssignmentPattern,
+    AST_RestElement,
+    AST_ForOfStatement,
+    AST_ForInStatement,
+    AST_ClassDeclaration,
+    AST_ClassExpression,
+    AST_MethodDefinition,
+    AST_AwaitExpression,
+    AST_YieldExpression,
+    AST_Super,
+    AST_ThisExpression,
+    
     AST_Error
 } AstNodeType;
 
@@ -245,6 +265,96 @@ typedef struct {
     AstNode *expression;  // Expression
 } ExportDefaultDeclaration;
 
+// Phase 2: Modern Features (ES6+)
+
+typedef struct {
+    AstVec params;      // Identifier* or Pattern*
+    AstNode *body;      // BlockStatement or Expression
+    int is_async;       // 1 if async arrow function
+} ArrowFunctionExpression;
+
+typedef struct {
+    AstVec quasis;      // TemplateElement*
+    AstVec expressions; // Expression*
+} TemplateLiteral;
+
+typedef struct {
+    char *value;        // template string content
+    int tail;           // 1 if this is the tail element
+} TemplateElement;
+
+typedef struct {
+    AstNode *argument;  // Expression
+} SpreadElement;
+
+typedef struct {
+    AstVec properties; // Property* or RestElement*
+} ObjectPattern;
+
+typedef struct {
+    AstVec elements; // Identifier*, Pattern*, or RestElement*
+} ArrayPattern;
+
+typedef struct {
+    AstNode *left;   // Pattern
+    AstNode *right;  // Expression
+} AssignmentPattern;
+
+typedef struct {
+    AstNode *argument; // Pattern
+} RestElement;
+
+typedef struct {
+    AstNode *left;   // Identifier or Pattern
+    AstNode *right;  // Expression (iterable)
+    AstNode *body;   // Statement
+} ForOfStatement;
+
+typedef struct {
+    AstNode *left;   // Identifier or Pattern
+    AstNode *right;  // Expression (object)
+    AstNode *body;   // Statement
+} ForInStatement;
+
+typedef struct {
+    AstNode *id;            // Identifier
+    AstNode *superClass;    // Expression or NULL
+    AstVec body;            // MethodDefinition*
+} ClassDeclaration;
+
+typedef struct {
+    AstNode *id;            // Identifier or NULL
+    AstNode *superClass;    // Expression or NULL
+    AstVec body;            // MethodDefinition*
+} ClassExpression;
+
+typedef struct {
+    AstNode *key;           // Identifier or Literal
+    AstVec params;          // Identifier* or Pattern*
+    AstNode *value;         // FunctionExpression
+    char *kind;             // "constructor", "method", "get", "set"
+    int is_static;          // 1 if static method
+} MethodDefinition;
+
+typedef struct {
+    AstNode *argument; // Expression or NULL
+} AwaitExpression;
+
+typedef struct {
+    AstNode *argument; // Expression or NULL
+    int delegate;      // 1 for yield*, 0 for yield
+} YieldExpression;
+
+typedef struct {
+    // empty for now, represents 'super' keyword
+    int unused;
+} Super;
+
+typedef struct {
+    // empty for now, represents 'this' keyword
+    int unused;
+} ThisExpression;
+
 typedef struct {
     char *message;
 } ErrorNode;
@@ -292,7 +402,25 @@ AstNode *ast_import_declaration(const char *source, Position s, Position e);
 AstNode *ast_import_specifier(AstNode *imported, AstNode *local);
 AstNode *ast_export_named_declaration(const char *source, Position s, Position e);
 AstNode *ast_export_default_declaration(Position s, Position e);
-AstNode *ast_error(const char *msg, Position s, Position e);
+
+// Phase 2 constructors
+AstNode *ast_arrow_function_expression(int is_async, Position s, Position e);
+AstNode *ast_template_literal(Position s, Position e);
+AstNode *ast_template_element(const char *value, int tail, Position s, Position e);
+AstNode *ast_spread_element(AstNode *argument, Position s, Position e);
+AstNode *ast_object_pattern(Position s, Position e);
+AstNode *ast_array_pattern(Position s, Position e);
+AstNode *ast_assignment_pattern(AstNode *left, AstNode *right, Position s, Position e);
+AstNode *ast_rest_element(AstNode *argument, Position s, Position e);
+AstNode *ast_for_of_statement(AstNode *left, AstNode *right, AstNode *body, Position s, Position e);
+AstNode *ast_for_in_statement(AstNode *left, AstNode *right, AstNode *body, Position s, Position e);
+AstNode *ast_class_declaration(AstNode *id, AstNode *superClass, Position s, Position e);
+AstNode *ast_class_expression(AstNode *id, AstNode *superClass, Position s, Position e);
+AstNode *ast_method_definition(AstNode *key, AstNode *value, const char *kind, int is_static, Position s, Position e);
+AstNode *ast_await_expression(AstNode *argument, Position s, Position e);
+AstNode *ast_yield_expression(AstNode *argument, int delegate, Position s, Position e);
+AstNode *ast_super(Position s, Position e);
+AstNode *ast_this_expression(Position s, Position e);
 
 // JSON printer
 void ast_print_json(const AstNode *node);

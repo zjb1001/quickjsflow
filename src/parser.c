@@ -44,6 +44,11 @@ static AstNode *parse_statement(Parser *p);
 static AstNode *parse_variable_declaration(Parser *p, VarKind kind);
 static AstNode *parse_function(Parser *p, int is_decl);
 
+// Phase 2: Modern Features
+static AstNode *parse_arrow_function(Parser *p, AstNode *param_or_params);
+static AstNode *parse_class(Parser *p, int is_decl);
+static AstNode *parse_template_literal(Parser *p);
+
 static char *dup_unquoted_string(const Token *tok) {
     const char *lex = (tok && tok->lexeme) ? tok->lexeme : "";
     size_t len = strlen(lex);
@@ -435,19 +440,54 @@ static AstNode *parse_for(Parser *p) {
     Position s = pos_start(&ft);
     if (!expect_punct(p, "(", NULL)) return ast_error("ExpectedOpenParen", s, s);
 
-    // init
-    AstNode *init = NULL;
+    // Check for for-in/for-of early
+    // Try to parse as for-in/for-of first by peeking ahead
+    size_t initial_pos = p->lx.pos; // save position
+    
+    // init/left side
+    AstNode *left = NULL;
     Token t = peek_tok(p);
-    if (!is_punct(&t, ";")) {
-        if (is_keyword(&t, "var")) { next_tok(p); init = parse_variable_declaration(p, VD_Var); }
-        else if (is_keyword(&t, "let")) { next_tok(p); init = parse_variable_declaration(p, VD_Let); }
-        else if (is_keyword(&t, "const")) { next_tok(p); init = parse_variable_declaration(p, VD_Const); }
-        else { init = parse_expression(p); }
+    if (is_keyword(&t, "var")) { 
+        next_tok(p); 
+        left = parse_variable_declaration(p, VD_Var); 
     }
-    Token semi1;
-    expect_punct(p, ";", &semi1);
+    else if (is_keyword(&t, "let")) { 
+        next_tok(p); 
+        left = parse_variable_declaration(p, VD_Let); 
+    }
+    else if (is_keyword(&t, "const")) { 
+        next_tok(p); 
+        left = parse_variable_declaration(p, VD_Const); 
+    }
+    else if (!is_punct(&t, ";")) {
+        // Try to parse left side - could be identifier for for-in/for-of
+        left = parse_expression(p);
+    }
 
-    // test
+    // Check for 'of' keyword
+    Token look = peek_tok(p);
+    if (is_keyword(&look, "of")) {
+        next_tok(p); // consume 'of'
+        AstNode *right = parse_expression(p);
+        Token rparen;
+        expect_punct(p, ")", &rparen);
+        AstNode *body = parse_statement(p);
+        Position e = body ? body->end : pos_end(&rparen);
+        return ast_for_of_statement(left, right, body, s, e);
+    }
+    
+    // Check for 'in' keyword
+    if (is_keyword(&look, "in")) {
+        next_tok(p); // consume 'in'
+        AstNode *right = parse_expression(p);
+        Token rparen;
+        expect_punct(p, ")", &rparen);
+        AstNode *body = parse_statement(p);
+        Position e = body ? body->end : pos_end(&rparen);
+        return ast_for_in_statement(left, right, body, s, e);
+    }
+
+    // Regular for loop
     AstNode *test = NULL;
     t = peek_tok(p);
     if (!is_punct(&t, ";")) { test = parse_expression(p); }
@@ -463,7 +503,7 @@ static AstNode *parse_for(Parser *p) {
 
     AstNode *body = parse_statement(p);
     Position e = body ? body->end : pos_end(&rparen);
-    return ast_for_statement(init, test, update, body, s, e);
+    return ast_for_statement(left, test, update, body, s, e);
 }
 
 static AstNode *parse_return(Parser *p) {
@@ -613,8 +653,26 @@ static AstNode *parse_primary(Parser *p) {
     Token t = peek_tok(p);
 
     if (is_keyword(&t, "function")) return parse_function(p, 0);
+    if (is_keyword(&t, "this")) {
+        Token this_tok = next_tok(p);
+        AstNode *node = ast_this_expression(pos_start(&this_tok), pos_end(&this_tok));
+        token_free(&this_tok);
+        return node;
+    }
+    if (is_keyword(&t, "super")) {
+        Token super_tok = next_tok(p);
+        AstNode *node = ast_super(pos_start(&super_tok), pos_end(&super_tok));
+        token_free(&super_tok);
+        return node;
+    }
     if (is_punct(&t, "{")) return parse_object_literal(p);
     if (is_punct(&t, "[")) return parse_array_literal(p);
+    
+    // Check for template literal
+    Token peek = peek_tok(p);
+    if (peek.type == TOKEN_TEMPLATE) {
+        return parse_template_literal(p);
+    }
 
     if (is_punct(&t, "(")) {
         next_tok(p); // consume '('
@@ -810,6 +868,42 @@ static AstNode *parse_assignment(Parser *p) {
     AstNode *left = parse_binary_expr(p, 0);
 
     Token t = peek_tok(p);
+    
+    // Check for arrow function: identifier => or (params) =>
+    if (is_punct(&t, "=>")) {
+        next_tok(p); // consume '=>'
+        Position s = left->start;
+        
+        // Parse arrow function body
+        Token body_peek = peek_tok(p);
+        AstNode *body = NULL;
+        if (is_punct(&body_peek, "{")) {
+            // Block body
+            body = parse_block(p);
+        } else {
+            // Expression body
+            body = parse_assignment(p);
+        }
+        
+        Position e = body ? body->end : pos_end(&t);
+        AstNode *arrow = ast_arrow_function_expression(0, s, e);
+        ArrowFunctionExpression *afe = (ArrowFunctionExpression *)arrow->data;
+        
+        // Handle parameters
+        // If left is an identifier, it's a single param
+        if (left && left->type == AST_Identifier) {
+            astvec_push(&afe->params, left);
+        } else {
+            // TODO: Handle multiple params from parenthesized list
+            // For now, just add the expression as-is
+            if (left) astvec_push(&afe->params, left);
+        }
+        
+        afe->body = body;
+        token_free(&t);
+        return arrow;
+    }
+    
     if (is_assign_op(&t)) {
         next_tok(p);
         AstNode *right = parse_assignment(p);
@@ -856,6 +950,136 @@ static AstNode *parse_variable_declaration(Parser *p, VarKind kind) {
     return decl;
 }
 
+// Phase 2: Modern Features
+
+static AstNode *parse_template_literal(Parser *p) {
+    Token backtick = next_tok(p); // consume template token
+    Position s = pos_start(&backtick);
+    AstNode *tl_node = ast_template_literal(s, pos_end(&backtick));
+    TemplateLiteral *tl = (TemplateLiteral *)tl_node->data;
+
+    // Extract template string content (removing backticks)
+    if (backtick.lexeme) {
+        const char *lex = backtick.lexeme;
+        size_t len = strlen(lex);
+        if (len >= 2 && lex[0] == '`' && lex[len-1] == '`') {
+            // Extract content between backticks
+            size_t content_len = len - 2;
+            char *content = (char *)malloc(content_len + 1);
+            if (content) {
+                memcpy(content, lex + 1, content_len);
+                content[content_len] = '\0';
+                
+                // For now, create a single template element with the whole content
+                // TODO: Parse ${expression} interpolations
+                AstNode *elem = ast_template_element(content, 1, s, pos_end(&backtick));
+                astvec_push(&tl->quasis, elem);
+                free(content);
+            }
+        }
+    }
+    
+    token_free(&backtick);
+    return tl_node;
+}
+
+static AstNode *parse_arrow_function(Parser *p, AstNode *param_or_params) {
+    // param_or_params is the parsed left side (single identifier or paren-enclosed list)
+    // Now we expect '=>' and then the body
+    Position s = param_or_params ? param_or_params->start : p->lx.pos > 0 ? ((Position){1, 1}) : ((Position){0, 0});
+    
+    // Consume '=>'
+    Token arrow = peek_tok(p);
+    if (!is_punct(&arrow, "=>")) {
+        return param_or_params; // Not an arrow function, return the expr as-is
+    }
+    next_tok(p);
+
+    // Parse body
+    Token next = peek_tok(p);
+    AstNode *body = NULL;
+    if (is_punct(&next, "{")) {
+        body = parse_block(p);
+    } else {
+        // Expression body
+        body = parse_assignment(p);
+    }
+
+    AstNode *arrow_fn = ast_arrow_function_expression(0, s, body ? body->end : pos_end(&arrow));
+    ArrowFunctionExpression *afe = (ArrowFunctionExpression *)arrow_fn->data;
+    
+    // Extract params from param_or_params
+    if (param_or_params && param_or_params->type == AST_Identifier) {
+        astvec_push(&afe->params, param_or_params);
+    } else if (param_or_params) {
+        // Could be from array pattern or other pattern
+        astvec_push(&afe->params, param_or_params);
+    }
+    
+    afe->body = body;
+    return arrow_fn;
+}
+
+static AstNode *parse_class(Parser *p, int is_decl) {
+    Token class_tok = next_tok(p); // consume 'class'
+    Position s = pos_start(&class_tok);
+
+    Token name_tok = peek_tok(p);
+    AstNode *class_id = NULL;
+    if (name_tok.type == TOKEN_IDENTIFIER) {
+        class_id = ast_identifier(name_tok.lexeme, pos_start(&name_tok), pos_end(&name_tok));
+        next_tok(p);
+    } else if (is_decl) {
+        return ast_error("ExpectedClassName", s, s);
+    }
+
+    AstNode *super_class = NULL;
+    Token look = peek_tok(p);
+    if (is_keyword(&look, "extends")) {
+        next_tok(p); // consume 'extends'
+        super_class = parse_primary(p);
+    }
+
+    if (!expect_punct(p, "{", NULL)) {
+        return ast_error("ExpectedClassBody", s, s);
+    }
+
+    AstNode *class_node = is_decl ? ast_class_declaration(class_id, super_class, s, s)
+                                   : ast_class_expression(class_id, super_class, s, s);
+    
+    if (is_decl) {
+        ClassDeclaration *cd = (ClassDeclaration *)class_node->data;
+        // Parse methods
+        for (;;) {
+            Token t = peek_tok(p);
+            if (is_punct(&t, "}")) {
+                next_tok(p);
+                class_node->end = pos_end(&t);
+                break;
+            }
+            // For now, skip method parsing - simplified
+            next_tok(p);
+        }
+    } else {
+        ClassExpression *ce = (ClassExpression *)class_node->data;
+        // Parse methods
+        for (;;) {
+            Token t = peek_tok(p);
+            if (is_punct(&t, "}")) {
+                next_tok(p);
+                class_node->end = pos_end(&t);
+                break;
+            }
+            // For now, skip method parsing - simplified
+            next_tok(p);
+        }
+    }
+    
+    token_free(&class_tok);
+    if (name_tok.type == TOKEN_IDENTIFIER) token_free(&name_tok);
+    return class_node;
+}
+
 static AstNode *parse_statement(Parser *p) {
     Token t = peek_tok(p);
     // skip comments
@@ -875,6 +1099,7 @@ static AstNode *parse_statement(Parser *p) {
     if (is_keyword(&t, "try")) return parse_try(p);
     if (is_keyword(&t, "throw")) return parse_throw(p);
     if (is_keyword(&t, "function")) return parse_function(p, 1);
+    if (is_keyword(&t, "class")) return parse_class(p, 1);
     if (is_keyword(&t, "import")) return parse_import(p);
     if (is_keyword(&t, "export")) return parse_export(p);
     if (is_keyword(&t, "return")) return parse_return(p);
