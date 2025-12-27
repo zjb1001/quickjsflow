@@ -509,6 +509,87 @@ static int emit_expression(CGCtx *cg, const AstNode *n, int parent_prec) {
             if (!emit_block(cg, fb ? fb->body : NULL, 0)) return 0;
             return 1;
         }
+        // Phase 2: Modern Features
+        case AST_ArrowFunctionExpression: {
+            ArrowFunctionExpression *afe = (ArrowFunctionExpression *)n->data;
+            if (afe && afe->is_async) {
+                if (!sb_append(&cg->buf, "async ")) return 0;
+            }
+            if (!sb_append_char(&cg->buf, '(')) return 0;
+            if (afe) {
+                for (size_t i = 0; i < afe->params.count; ++i) {
+                    if (i > 0 && !sb_append(&cg->buf, ", ")) return 0;
+                    if (!emit_expression(cg, afe->params.items[i], precedence_of(afe->params.items[i]))) return 0;
+                }
+            }
+            if (!sb_append(&cg->buf, ") => ")) return 0;
+            // Check if body is a block or expression
+            if (afe && afe->body) {
+                if (afe->body->type == AST_BlockStatement) {
+                    if (!emit_block(cg, afe->body, 0)) return 0;
+                } else {
+                    if (!emit_expression(cg, afe->body, 0)) return 0;
+                }
+            }
+            return 1;
+        }
+        case AST_TemplateLiteral: {
+            TemplateLiteral *tl = (TemplateLiteral *)n->data;
+            if (!sb_append_char(&cg->buf, '`')) return 0;
+            if (tl) {
+                for (size_t i = 0; i < tl->quasis.count; ++i) {
+                    AstNode *elem = tl->quasis.items[i];
+                    if (elem && elem->type == AST_TemplateElement) {
+                        TemplateElement *te = (TemplateElement *)elem->data;
+                        if (te && te->value) {
+                            if (!sb_append(&cg->buf, te->value)) return 0;
+                        }
+                    }
+                    // TODO: Add expression interpolation ${expr}
+                    if (i < tl->expressions.count) {
+                        if (!sb_append(&cg->buf, "${")) return 0;
+                        if (!emit_expression(cg, tl->expressions.items[i], 0)) return 0;
+                        if (!sb_append_char(&cg->buf, '}')) return 0;
+                    }
+                }
+            }
+            if (!sb_append_char(&cg->buf, '`')) return 0;
+            return 1;
+        }
+        case AST_SpreadElement: {
+            SpreadElement *se = (SpreadElement *)n->data;
+            if (!sb_append(&cg->buf, "...")) return 0;
+            if (se && se->argument) {
+                if (!emit_expression(cg, se->argument, precedence_of(se->argument))) return 0;
+            }
+            return 1;
+        }
+        case AST_ThisExpression: {
+            return sb_append(&cg->buf, "this");
+        }
+        case AST_Super: {
+            return sb_append(&cg->buf, "super");
+        }
+        case AST_AwaitExpression: {
+            AwaitExpression *ae = (AwaitExpression *)n->data;
+            if (!sb_append(&cg->buf, "await ")) return 0;
+            if (ae && ae->argument) {
+                if (!emit_expression(cg, ae->argument, precedence_of(ae->argument))) return 0;
+            }
+            return 1;
+        }
+        case AST_YieldExpression: {
+            YieldExpression *ye = (YieldExpression *)n->data;
+            if (!sb_append(&cg->buf, "yield")) return 0;
+            if (ye && ye->delegate) {
+                if (!sb_append_char(&cg->buf, '*')) return 0;
+            }
+            if (ye && ye->argument) {
+                if (!sb_append_char(&cg->buf, ' ')) return 0;
+                if (!emit_expression(cg, ye->argument, precedence_of(ye->argument))) return 0;
+            }
+            return 1;
+        }
         default:
             // Unsupported node types fall back to JSON printer pointer
             return sb_append(&cg->buf, "/* unsupported */");
@@ -769,6 +850,76 @@ static int emit_statement(CGCtx *cg, const AstNode *n) {
                 if (!emit_expression(cg, ed->expression, 0)) return 0;
             }
             if (!sb_append_char(&cg->buf, ';')) return 0;
+            return cg_newline(cg);
+        }
+        // Phase 2: Modern Features
+        case AST_ForOfStatement: {
+            ForOfStatement *fos = (ForOfStatement *)n->data;
+            if (!cg_indent(cg)) return 0;
+            add_mapping(cg, n);
+            if (!sb_append(&cg->buf, "for (")) return 0;
+            if (fos && fos->left) {
+                if (!emit_expression(cg, fos->left, 0)) return 0;
+            }
+            if (!sb_append(&cg->buf, " of ")) return 0;
+            if (fos && fos->right) {
+                if (!emit_expression(cg, fos->right, 0)) return 0;
+            }
+            if (!sb_append(&cg->buf, ") ")) return 0;
+            if (fos && fos->body) {
+                if (fos->body->type == AST_BlockStatement) {
+                    if (!emit_block(cg, fos->body, 1)) return 0;
+                } else {
+                    if (!cg_newline(cg)) return 0;
+                    cg->indent_level++;
+                    if (!emit_statement(cg, fos->body)) return 0;
+                    cg->indent_level--;
+                }
+            }
+            return 1;
+        }
+        case AST_ForInStatement: {
+            ForInStatement *fis = (ForInStatement *)n->data;
+            if (!cg_indent(cg)) return 0;
+            add_mapping(cg, n);
+            if (!sb_append(&cg->buf, "for (")) return 0;
+            if (fis && fis->left) {
+                if (!emit_expression(cg, fis->left, 0)) return 0;
+            }
+            if (!sb_append(&cg->buf, " in ")) return 0;
+            if (fis && fis->right) {
+                if (!emit_expression(cg, fis->right, 0)) return 0;
+            }
+            if (!sb_append(&cg->buf, ") ")) return 0;
+            if (fis && fis->body) {
+                if (fis->body->type == AST_BlockStatement) {
+                    if (!emit_block(cg, fis->body, 1)) return 0;
+                } else {
+                    if (!cg_newline(cg)) return 0;
+                    cg->indent_level++;
+                    if (!emit_statement(cg, fis->body)) return 0;
+                    cg->indent_level--;
+                }
+            }
+            return 1;
+        }
+        case AST_ClassDeclaration: {
+            ClassDeclaration *cd = (ClassDeclaration *)n->data;
+            if (!cg_indent(cg)) return 0;
+            add_mapping(cg, n);
+            if (!sb_append(&cg->buf, "class ")) return 0;
+            if (cd && cd->id) {
+                if (!emit_expression(cg, cd->id, 0)) return 0;
+            }
+            if (cd && cd->superClass) {
+                if (!sb_append(&cg->buf, " extends ")) return 0;
+                if (!emit_expression(cg, cd->superClass, 0)) return 0;
+            }
+            if (!sb_append(&cg->buf, " {")) return 0;
+            if (!cg_newline(cg)) return 0;
+            // TODO: emit class methods
+            if (!cg_indent(cg)) return 0;
+            if (!sb_append_char(&cg->buf, '}')) return 0;
             return cg_newline(cg);
         }
         default:
