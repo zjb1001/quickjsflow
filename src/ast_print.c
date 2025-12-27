@@ -404,6 +404,24 @@ AstNode *ast_import_specifier(AstNode *imported, AstNode *local) {
     return n;
 }
 
+AstNode *ast_import_default_specifier(AstNode *local, Position s, Position e) {
+    AstNode *n = new_node(AST_ImportDefaultSpecifier);
+    ImportDefaultSpecifier *ids = (ImportDefaultSpecifier *)calloc(1, sizeof(ImportDefaultSpecifier));
+    ids->local = local;
+    n->data = ids;
+    n->start = s; n->end = e;
+    return n;
+}
+
+AstNode *ast_import_namespace_specifier(AstNode *local, Position s, Position e) {
+    AstNode *n = new_node(AST_ImportNamespaceSpecifier);
+    ImportNamespaceSpecifier *ins = (ImportNamespaceSpecifier *)calloc(1, sizeof(ImportNamespaceSpecifier));
+    ins->local = local;
+    n->data = ins;
+    n->start = s; n->end = e;
+    return n;
+}
+
 AstNode *ast_export_named_declaration(const char *source, Position s, Position e) {
     AstNode *n = new_node(AST_ExportNamedDeclaration);
     ExportNamedDeclaration *end = (ExportNamedDeclaration *)calloc(1, sizeof(ExportNamedDeclaration));
@@ -826,6 +844,14 @@ static void print_import_specifier(const ImportSpecifier *is) {
     printf(",\"local\":"); print_node(is->local);
 }
 
+static void print_import_default_specifier(const ImportDefaultSpecifier *ids) {
+    printf("\"local\":"); print_node(ids->local);
+}
+
+static void print_import_namespace_specifier(const ImportNamespaceSpecifier *ins) {
+    printf("\"local\":"); print_node(ins->local);
+}
+
 static void print_export_named_declaration(const ExportNamedDeclaration *end) {
     printf("\"specifiers\":[");
     for (size_t i = 0; i < end->specifiers.count; ++i) {
@@ -968,6 +994,8 @@ static void print_node(const AstNode *n) {
         case AST_ContinueStatement: type = "ContinueStatement"; break;
         case AST_ImportDeclaration: type = "ImportDeclaration"; break;
         case AST_ImportSpecifier: type = "ImportSpecifier"; break;
+        case AST_ImportDefaultSpecifier: type = "ImportDefaultSpecifier"; break;
+        case AST_ImportNamespaceSpecifier: type = "ImportNamespaceSpecifier"; break;
         case AST_ExportNamedDeclaration: type = "ExportNamedDeclaration"; break;
         case AST_ExportDefaultDeclaration: type = "ExportDefaultDeclaration"; break;
         case AST_Error: type = "Error"; break;
@@ -1029,6 +1057,8 @@ static void print_node(const AstNode *n) {
         case AST_ContinueStatement: print_continue_statement((const ContinueStatement *)n->data); break;
         case AST_ImportDeclaration: print_import_declaration((const ImportDeclaration *)n->data); break;
         case AST_ImportSpecifier: print_import_specifier((const ImportSpecifier *)n->data); break;
+        case AST_ImportDefaultSpecifier: print_import_default_specifier((const ImportDefaultSpecifier *)n->data); break;
+        case AST_ImportNamespaceSpecifier: print_import_namespace_specifier((const ImportNamespaceSpecifier *)n->data); break;
         case AST_ExportNamedDeclaration: print_export_named_declaration((const ExportNamedDeclaration *)n->data); break;
         case AST_ExportDefaultDeclaration: print_export_default_declaration((const ExportDefaultDeclaration *)n->data); break;
         case AST_Error: print_error((const ErrorNode *)n->data); break;
@@ -1429,6 +1459,24 @@ static AstNode *clone_node(const AstNode *n) {
             c->data = cis;
             break;
         }
+        case AST_ImportDefaultSpecifier: {
+            ImportDefaultSpecifier *ids = (ImportDefaultSpecifier *)n->data;
+            ImportDefaultSpecifier *cids = (ImportDefaultSpecifier *)calloc(1, sizeof(ImportDefaultSpecifier));
+            if (ids) {
+                cids->local = clone_node(ids->local);
+            }
+            c->data = cids;
+            break;
+        }
+        case AST_ImportNamespaceSpecifier: {
+            ImportNamespaceSpecifier *ins = (ImportNamespaceSpecifier *)n->data;
+            ImportNamespaceSpecifier *cins = (ImportNamespaceSpecifier *)calloc(1, sizeof(ImportNamespaceSpecifier));
+            if (ins) {
+                cins->local = clone_node(ins->local);
+            }
+            c->data = cins;
+            break;
+        }
         case AST_ExportNamedDeclaration: {
             ExportNamedDeclaration *en = (ExportNamedDeclaration *)n->data;
             ExportNamedDeclaration *cen = (ExportNamedDeclaration *)calloc(1, sizeof(ExportNamedDeclaration));
@@ -1728,6 +1776,8 @@ static void free_import_decl(ImportDeclaration *id) {
     free(id->source); free(id);
 }
 static void free_import_spec(ImportSpecifier *is) { ast_release(is->imported); ast_release(is->local); free(is); }
+static void free_import_default_spec(ImportDefaultSpecifier *ids) { ast_release(ids->local); free(ids); }
+static void free_import_namespace_spec(ImportNamespaceSpecifier *ins) { ast_release(ins->local); free(ins); }
 static void free_export_named(ExportNamedDeclaration *end) {
     for (size_t i = 0; i < end->specifiers.count; ++i) ast_release(end->specifiers.items[i]);
     free(end->specifiers.items);
@@ -1814,6 +1864,8 @@ static void free_node(AstNode *n) {
             case AST_ContinueStatement: free_continue_stmt((ContinueStatement *)n->data); break;
             case AST_ImportDeclaration: free_import_decl((ImportDeclaration *)n->data); break;
             case AST_ImportSpecifier: free_import_spec((ImportSpecifier *)n->data); break;
+            case AST_ImportDefaultSpecifier: free_import_default_spec((ImportDefaultSpecifier *)n->data); break;
+            case AST_ImportNamespaceSpecifier: free_import_namespace_spec((ImportNamespaceSpecifier *)n->data); break;
             case AST_ExportNamedDeclaration: free_export_named((ExportNamedDeclaration *)n->data); break;
             case AST_ExportDefaultDeclaration: free_export_default((ExportDefaultDeclaration *)n->data); break;
             case AST_ArrowFunctionExpression: free_arrow_func((ArrowFunctionExpression *)n->data); break;

@@ -37,6 +37,8 @@ typedef enum {
     AST_ContinueStatement,
     AST_ImportDeclaration,
     AST_ImportSpecifier,
+    AST_ImportDefaultSpecifier,
+    AST_ImportNamespaceSpecifier,
     AST_ExportNamedDeclaration,
     AST_ExportDefaultDeclaration,
     
@@ -114,7 +116,14 @@ typedef struct {
     char *name;
 } Identifier;
 
-typedef enum { LIT_Number = 1, LIT_String } LiteralKind;
+typedef enum { 
+    LIT_Number = 1, 
+    LIT_String,
+    LIT_Boolean,
+    LIT_Null,
+    LIT_Undefined,
+    LIT_RegExp
+} LiteralKind;
 
 typedef struct {
     LiteralKind kind;
@@ -253,6 +262,14 @@ typedef struct {
     AstNode *imported;  // Identifier
     AstNode *local;     // Identifier
 } ImportSpecifier;
+
+typedef struct {
+    AstNode *local;     // Identifier
+} ImportDefaultSpecifier;
+
+typedef struct {
+    AstNode *local;     // Identifier (the name after 'as')
+} ImportNamespaceSpecifier;
 
 typedef struct {
     AstVec specifiers;   // Identifier* (exported names)
@@ -400,6 +417,8 @@ AstNode *ast_break_statement(Position s, Position e);
 AstNode *ast_continue_statement(Position s, Position e);
 AstNode *ast_import_declaration(const char *source, Position s, Position e);
 AstNode *ast_import_specifier(AstNode *imported, AstNode *local);
+AstNode *ast_import_default_specifier(AstNode *local, Position s, Position e);
+AstNode *ast_import_namespace_specifier(AstNode *local, Position s, Position e);
 AstNode *ast_export_named_declaration(const char *source, Position s, Position e);
 AstNode *ast_export_default_declaration(Position s, Position e);
 
@@ -421,6 +440,9 @@ AstNode *ast_await_expression(AstNode *argument, Position s, Position e);
 AstNode *ast_yield_expression(AstNode *argument, int delegate, Position s, Position e);
 AstNode *ast_super(Position s, Position e);
 AstNode *ast_this_expression(Position s, Position e);
+// Error node
+AstNode *ast_error(const char *msg, Position s, Position e);
+
 
 // JSON printer
 void ast_print_json(const AstNode *node);

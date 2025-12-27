@@ -45,7 +45,9 @@ static AstNode *parse_variable_declaration(Parser *p, VarKind kind);
 static AstNode *parse_function(Parser *p, int is_decl);
 
 // Phase 2: Modern Features
+#ifdef ENABLE_ARROW_FUNCTION_PARSING
 static AstNode *parse_arrow_function(Parser *p, AstNode *param_or_params);
+#endif
 static AstNode *parse_class(Parser *p, int is_decl);
 static AstNode *parse_template_literal(Parser *p);
 
@@ -317,17 +319,42 @@ static AstNode *parse_import(Parser *p) {
     ImportDeclaration *id = (ImportDeclaration *)imp->data;
 
     Token t = peek_tok(p);
-    // default import
+    
+    // default import: import defaultExport from 'module'
     if (t.type == TOKEN_IDENTIFIER) {
         Token def = next_tok(p);
-        AstNode *imported = ast_identifier(def.lexeme, pos_start(&def), pos_end(&def));
         AstNode *local = ast_identifier(def.lexeme, pos_start(&def), pos_end(&def));
-        AstNode *spec = ast_import_specifier(imported, local);
+        AstNode *spec = ast_import_default_specifier(local, pos_start(&def), pos_end(&def));
         astvec_push(&id->specifiers, spec);
         token_free(&def);
+        
+        // Check for comma (mixed import: import defaultExport, { named } from 'module')
+        Token comma = peek_tok(p);
+        if (is_punct(&comma, ",")) {
+            next_tok(p);
+            t = peek_tok(p);
+        }
+    }
+    
+    // namespace import: import * as name from 'module'
+    if (is_punct(&t, "*")) {
+        next_tok(p); // consume *
+        Token as_tok = peek_tok(p);
+        if (!is_keyword(&as_tok, "as")) return ast_error("ExpectedAs", pos_start(&as_tok), pos_end(&as_tok));
+        next_tok(p); // consume 'as'
+        
+        Token name = peek_tok(p);
+        if (name.type != TOKEN_IDENTIFIER) return ast_error("ExpectedIdentifier", pos_start(&name), pos_end(&name));
+        next_tok(p);
+        
+        AstNode *local = ast_identifier(name.lexeme, pos_start(&name), pos_end(&name));
+        AstNode *spec = ast_import_namespace_specifier(local, pos_start(&name), pos_end(&name));
+        astvec_push(&id->specifiers, spec);
+        token_free(&name);
+        t = peek_tok(p);
     }
 
-    // named imports
+    // named imports: import { x, y } from 'module'
     t = peek_tok(p);
     if (is_punct(&t, "{")) {
         next_tok(p);
@@ -339,6 +366,19 @@ static AstNode *parse_import(Parser *p) {
                 Token name = next_tok(p);
                 AstNode *imported = ast_identifier(name.lexeme, pos_start(&name), pos_end(&name));
                 AstNode *local = ast_identifier(name.lexeme, pos_start(&name), pos_end(&name));
+                
+                // Check for 'as' alias: import { x as y }
+                Token as_check = peek_tok(p);
+                if (is_keyword(&as_check, "as")) {
+                    next_tok(p); // consume 'as'
+                    Token alias = peek_tok(p);
+                    if (alias.type != TOKEN_IDENTIFIER) return ast_error("ExpectedIdentifier", pos_start(&alias), pos_end(&alias));
+                    next_tok(p);
+                    ast_release(local);
+                    local = ast_identifier(alias.lexeme, pos_start(&alias), pos_end(&alias));
+                    token_free(&alias);
+                }
+                
                 AstNode *spec = ast_import_specifier(imported, local);
                 astvec_push(&id->specifiers, spec);
                 token_free(&name);
@@ -440,10 +480,6 @@ static AstNode *parse_for(Parser *p) {
     Position s = pos_start(&ft);
     if (!expect_punct(p, "(", NULL)) return ast_error("ExpectedOpenParen", s, s);
 
-    // Check for for-in/for-of early
-    // Try to parse as for-in/for-of first by peeking ahead
-    size_t initial_pos = p->lx.pos; // save position
-    
     // init/left side
     AstNode *left = NULL;
     Token t = peek_tok(p);
@@ -536,11 +572,25 @@ static AstNode *parse_continue(Parser *p) {
     return ast_continue_statement(s, pos_end(&ct));
 }
 
-// literal keywords: null/true/false as string literal tokens for now
+// literal keywords: null/true/false/undefined
 static AstNode *parse_literal_keyword(Token t) {
     Position s = pos_start(&t);
     Position e = pos_end(&t);
-    AstNode *lit = ast_literal(LIT_String, t.lexeme, s, e);
+    AstNode *lit = NULL;
+    
+    if (is_keyword(&t, "true")) {
+        lit = ast_literal(LIT_Boolean, "true", s, e);
+    } else if (is_keyword(&t, "false")) {
+        lit = ast_literal(LIT_Boolean, "false", s, e);
+    } else if (is_keyword(&t, "null")) {
+        lit = ast_literal(LIT_Null, "null", s, e);
+    } else if (is_keyword(&t, "undefined")) {
+        lit = ast_literal(LIT_Undefined, "undefined", s, e);
+    } else {
+        // Fallback for other keywords as string literals
+        lit = ast_literal(LIT_String, t.lexeme, s, e);
+    }
+    
     token_free(&t);
     return lit;
 }
@@ -981,6 +1031,8 @@ static AstNode *parse_template_literal(Parser *p) {
     
     token_free(&backtick);
     return tl_node;
+// Arrow function parser (currently not used, reserved for future implementation)
+#ifdef ENABLE_ARROW_FUNCTION_PARSING
 }
 
 static AstNode *parse_arrow_function(Parser *p, AstNode *param_or_params) {
@@ -1018,6 +1070,7 @@ static AstNode *parse_arrow_function(Parser *p, AstNode *param_or_params) {
     
     afe->body = body;
     return arrow_fn;
+#endif
 }
 
 static AstNode *parse_class(Parser *p, int is_decl) {
@@ -1047,34 +1100,18 @@ static AstNode *parse_class(Parser *p, int is_decl) {
     AstNode *class_node = is_decl ? ast_class_declaration(class_id, super_class, s, s)
                                    : ast_class_expression(class_id, super_class, s, s);
     
-    if (is_decl) {
-        ClassDeclaration *cd = (ClassDeclaration *)class_node->data;
-        // Parse methods
-        for (;;) {
-            Token t = peek_tok(p);
-            if (is_punct(&t, "}")) {
-                next_tok(p);
-                class_node->end = pos_end(&t);
-                break;
-            }
-            // For now, skip method parsing - simplified
+    // Parse class body methods
+    for (;;) {
+        Token t = peek_tok(p);
+        if (is_punct(&t, "}")) {
             next_tok(p);
+            class_node->end = pos_end(&t);
+            break;
         }
-    } else {
-        ClassExpression *ce = (ClassExpression *)class_node->data;
-        // Parse methods
-        for (;;) {
-            Token t = peek_tok(p);
-            if (is_punct(&t, "}")) {
-                next_tok(p);
-                class_node->end = pos_end(&t);
-                break;
-            }
-            // For now, skip method parsing - simplified
-            next_tok(p);
-        }
+        // For now, skip method parsing - simplified
+        next_tok(p);
     }
-    
+
     token_free(&class_tok);
     if (name_tok.type == TOKEN_IDENTIFIER) token_free(&name_tok);
     return class_node;
