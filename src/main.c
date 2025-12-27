@@ -2,6 +2,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include "quickjsflow/lexer.h"
+#include "quickjsflow/parser.h"
+#include "quickjsflow/ast.h"
 
 static char *read_file(const char *path, size_t *out_len) {
     FILE *f = fopen(path, "rb");
@@ -68,7 +70,7 @@ static int cmd_lex(const char *path) {
 }
 
 static void usage(void) {
-    fprintf(stderr, "Usage: quickjsflow lex <file>\n");
+    fprintf(stderr, "Usage: quickjsflow lex <file> | parse <file>\n");
 }
 
 int main(int argc, char **argv) {
@@ -76,6 +78,16 @@ int main(int argc, char **argv) {
     const char *cmd = argv[1];
     if (strcmp(cmd, "lex") == 0) {
         return cmd_lex(argv[2]);
+    }
+    if (strcmp(cmd, "parse") == 0) {
+        size_t len = 0; char *src = read_file(argv[2], &len);
+        if (!src) { fprintf(stderr, "Failed to read file: %s\n", argv[2]); return 2; }
+        Parser p; parser_init(&p, src, len);
+        AstNode *prog = parse_program(&p);
+        ast_print_json(prog);
+        ast_free(prog);
+        free(src);
+        return 0;
     }
     usage();
     return 1;
