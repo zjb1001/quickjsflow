@@ -110,9 +110,9 @@ make clean
 - [x] 02-词法分析与错误恢复-Lexer（TokenStream + L1 容错）✅ 完成
 - [x] 03-语法解析与ESTree-AST结构（阶段1语法 + 注释挂载 + L2 容错）✅ 完成
 - [x] 11-集成测试与模块边界规范（契约定义 + Round-trip）✅ 完成（基础框架）
-- [ ] 04-作用域分析与符号表-ScopeManager（绑定/引用/遮蔽/TDZ）
-- [ ] 05-AST编辑与不可变操作API（不可变 + 作用域感知）
-- [ ] 06-代码生成与SourceMap-格式化集成（注释还原 + SourceMap）
+- [x] 04-作用域分析与符号表-ScopeManager（绑定/引用/遮蔽/TDZ）✅ 完成（47个测试通过）
+- [x] 05-AST编辑与不可变操作API（不可变 + 作用域感知）✅ 完成（14个测试通过）
+- [x] 06-代码生成与SourceMap-格式化集成（注释还原 + SourceMap）✅ 完成（23个round-trip测试通过）
 - [ ] 08-CLI-SDK与插件扩展接口（基础命令 + SDK）
 - [ ] 09-质量与基准测试护栏（CI/覆盖率/基准）
 - [ ] 10-增量编辑与Diff算法（Phase 2）
@@ -198,6 +198,15 @@ make clean
 
 **验收**：
 - ✅ 所有 MVP token 类型通过测试
+- ✅ 错误 token 准确识别且流继续输出
+- ✅ 注释保留完整，位置信息精确
+- ✅ 支持 L1 容错（未闭合字符串、注释等）
+
+**状态**：✅ **已完成**
+- ✅ 实现：src/lexer.c (225行)
+- ✅ 测试：test_integration.c 中10个集成测试通过
+- ✅ 功能：完整的 Token 流生成、注释处理、错误恢复
+- ✅ 性能：满足基准要求
 - ✅ 错误输入不中断流
 - ✅ 注释保留完整
 
@@ -228,7 +237,11 @@ make clean
 
 **依赖**：Issue 12（语法矩阵）
 
-**状态**：等待 Issue 12 明确，然后实现
+**状态**：✅ **已完成**
+- ✅ 实现：src/parser.c (916行), src/ast_print.c
+- ✅ 测试：109个测试通过（expressions 33, statements 19, phase1_full 24, roundtrip 23, integration 10）
+- ✅ 功能：递归下降解析器、注释挂载、L2容错、ESTree AST
+- ✅ Round-trip：23个测试全部通过
 
 ---
 
@@ -255,7 +268,11 @@ make clean
 
 **依赖**：Issue 13（细化规范）, Issue 03（AST）
 
-**状态**：等待 Issue 13 明确，然后实现
+**状态**：✅ **已完成**
+- ✅ 实现：src/scope.c (825行)
+- ✅ 测试：test_scope.c 中47个测试全部通过
+- ✅ 功能：作用域链构建、变量绑定、引用解析、TDZ检测、遮蔽分析
+- ✅ 工具：Scope dump 功能已实现
 
 ---
 
@@ -282,7 +299,11 @@ make clean
 
 **依赖**：Issue 04（ScopeManager），Issue 03（AST）
 
-**状态**：等待 Issue 04，然后实现
+**状态**：✅ **已完成**
+- ✅ 实现：src/edit.c (941行)
+- ✅ 测试：test_edit.c 中14个测试全部通过
+- ✅ 功能：不可变AST编辑、Replace/Remove/Insert、Visitor模式、作用域感知的Rename
+- ✅ API：完整的编辑操作接口和AST遍历器
 
 ---
 
@@ -309,7 +330,11 @@ make clean
 
 **依赖**：Issue 03（AST）, Issue 05（编辑 API）
 
-**状态**：等待 Issue 03/05，然后实现
+**状态**：✅ **已完成**
+- ✅ 实现：src/codegen.c (893行)
+- ✅ 测试：test_roundtrip.c 中23个round-trip测试全部通过
+- ✅ 功能：AST→源码生成、SourceMap生成、注释还原、可配置格式化
+- ✅ 验证：verify_issue06 验证程序通过，SourceMap格式正确
 
 ---
 

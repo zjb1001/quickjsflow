@@ -60,15 +60,15 @@
   - **Comment Tests**：验证注释是否挂载到正确的节点。
 
 ## 任务清单
-- [ ] 定义 AST 节点类型（TypeScript 接口或 JSDoc），包含 `loc`, `range`, `comments`。
-- [ ] 实现基础解析框架（`Parser` 类，`next()`, `expect()` 等工具方法）。
-- [ ] 实现 **Statement** 解析（Variable, If, Return, Block, etc.）。
-- [ ] 实现 **Expression** 解析（Binary, Unary, Call, Member, etc.）。
-- [ ] 实现 **Pratt Parsing** 处理表达式优先级。
-- [ ] 实现 **L2 错误恢复**机制（`synchronize()` 方法）。
-- [ ] 实现 **注释挂载** 逻辑。
-- [ ] 集成 Issue 12 的所有 MVP 语法特性。
-- [ ] 编写快照测试与容错测试。
+- [x] 定义 AST 节点类型（TypeScript 接口或 JSDoc），包含 `loc`, `range`, `comments`。
+- [x] 实现基础解析框架（`Parser` 类，`next()`, `expect()` 等工具方法）。
+- [x] 实现 **Statement** 解析（Variable, If, Return, Block, etc.）。
+- [x] 实现 **Expression** 解析（Binary, Unary, Call, Member, etc.）。
+- [x] 实现 **Pratt Parsing** 处理表达式优先级。
+- [x] 实现 **L2 错误恢复**机制（`synchronize()` 方法）。
+- [x] 实现 **注释挂载** 逻辑。
+- [x] 集成 Issue 12 的所有 MVP 语法特性。
+- [x] 编写快照测试与容错测试。
 
 ## 验收标准
 - ✅ 100% 覆盖 Issue 12 定义的 MVP 语法。
@@ -76,6 +76,11 @@
 - ✅ 注释（单行/多行）准确挂载，不丢失，不漂移。
 - ✅ 位置信息（Line/Column）精确，包含起始和结束。
 - ✅ 通过 Test262 基础测试集（可选，作为高质量标准）。
+
+## 实现状态
+✅ **已完成** (2025-12-27)
+- 实现：src/parser.c (916行), src/ast_print.c (1293行)
+- 测试：109个测试通过 (expressions 33, statements 19, phase1 24, roundtrip 23, integration 10)
 
 ## 优先级
 🔴 **MVP**（核心中的核心）
