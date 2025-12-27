@@ -65,7 +65,18 @@ typedef struct {
 
 typedef struct {
     AstVec body; // statements
+    // captured comments in source order
+    struct Comment **comments;
+    size_t comment_count;
+    size_t comment_capacity;
 } Program;
+
+typedef struct Comment {
+    int is_block;    // 1 for block, 0 for line
+    char *text;      // raw comment text without delimiters
+    Position start;  // start position in source
+    Position end;    // end position in source
+} Comment;
 
 typedef enum { VD_Var = 1, VD_Let, VD_Const } VarKind;
 
@@ -241,6 +252,10 @@ typedef struct {
 // vector helpers
 void astvec_init(AstVec *v);
 void astvec_push(AstVec *v, AstNode *n);
+
+// comment helpers
+void commentvec_push(Program *p, Comment *c);
+Comment *comment_clone(const Comment *c);
 
 // constructors
 AstNode *ast_program(void);

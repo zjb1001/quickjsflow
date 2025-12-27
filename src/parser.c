@@ -35,6 +35,7 @@ static Token peek_tok(Parser *p) {
 void parser_init(Parser *p, const char *input, size_t length) {
     lexer_init(&p->lx, input, length);
     p->has_lookahead = 0;
+    p->comment_sink = NULL;
 }
 
 // forward decls
@@ -60,6 +61,29 @@ static char *dup_unquoted_string(const Token *tok) {
     return out;
 }
 
+static void record_comment(Parser *p, const Token *tok) {
+    if (!p || !tok || !p->comment_sink) return;
+    Comment *c = (Comment *)calloc(1, sizeof(Comment));
+    if (!c) return;
+    c->is_block = (tok->type == TOKEN_COMMENT_BLOCK);
+    if (tok->lexeme) {
+        const char *lex = tok->lexeme;
+        size_t len = strlen(lex);
+        size_t start = 0, end = len;
+        if (len >= 2 && lex[0] == '/' && lex[1] == '/') start = 2;
+        else if (len >= 4 && lex[0] == '/' && lex[1] == '*') { start = 2; if (lex[len - 2] == '*' && lex[len - 1] == '/') end = len - 2; }
+        size_t out_len = (end > start) ? (end - start) : 0;
+        c->text = (char *)malloc(out_len + 1);
+        if (c->text) {
+            memcpy(c->text, lex + start, out_len);
+            c->text[out_len] = '\0';
+        }
+    }
+    c->start = pos_start((Token *)tok);
+    c->end = pos_end((Token *)tok);
+    commentvec_push(p->comment_sink, c);
+}
+
 static int expect_punct(Parser *p, const char *s, Token *out) {
     Token t = peek_tok(p);
     if (!is_punct(&t, s)) return 0;
@@ -81,8 +105,8 @@ static AstNode *parse_block(Parser *p) {
         Token t = peek_tok(p);
         if (t.type == TOKEN_EOF) break;
         if (is_punct(&t, "}")) { next_tok(p); blk->end = pos_end(&t); break; }
-        // skip comments
-        if (t.type == TOKEN_COMMENT_LINE || t.type == TOKEN_COMMENT_BLOCK) { next_tok(p); continue; }
+        // skip comments but record them
+        if (t.type == TOKEN_COMMENT_LINE || t.type == TOKEN_COMMENT_BLOCK) { Token ct = next_tok(p); record_comment(p, &ct); token_free(&ct); continue; }
         AstNode *stmt = parse_statement(p);
         if (!stmt) break;
         astvec_push(&bs->body, stmt);
@@ -835,7 +859,12 @@ static AstNode *parse_variable_declaration(Parser *p, VarKind kind) {
 static AstNode *parse_statement(Parser *p) {
     Token t = peek_tok(p);
     // skip comments
-    if (t.type == TOKEN_COMMENT_LINE || t.type == TOKEN_COMMENT_BLOCK) { next_tok(p); return parse_statement(p); }
+    if (t.type == TOKEN_COMMENT_LINE || t.type == TOKEN_COMMENT_BLOCK) {
+        Token ct = next_tok(p);
+        record_comment(p, &ct);
+        token_free(&ct);
+        return parse_statement(p);
+    }
 
     if (is_punct(&t, "{")) return parse_block(p);
     if (is_keyword(&t, "if")) return parse_if(p);
@@ -868,9 +897,15 @@ static AstNode *parse_statement(Parser *p) {
 AstNode *parse_program(Parser *p) {
     AstNode *prog = ast_program();
     Program *pr = (Program *)prog->data;
+    p->comment_sink = pr;
     for (;;) {
         Token t = peek_tok(p);
-        if (t.type == TOKEN_COMMENT_LINE || t.type == TOKEN_COMMENT_BLOCK) { next_tok(p); continue; }
+        if (t.type == TOKEN_COMMENT_LINE || t.type == TOKEN_COMMENT_BLOCK) {
+            Token ct = next_tok(p);
+            record_comment(p, &ct);
+            token_free(&ct);
+            continue;
+        }
         if (t.type == TOKEN_EOF) { break; }
         AstNode *stmt = parse_statement(p);
         if (!stmt) break;

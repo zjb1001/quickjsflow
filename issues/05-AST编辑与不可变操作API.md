@@ -10,6 +10,7 @@
 - 负责人：@page
 - 依赖：Issue 03（AST）、Issue 04（ScopeManager）
 - 目标版本：v0.1.0（MVP）
+- 状态：已完成（commit c1564c2）
 
 ## 📁 项目结构与开发环境
 
@@ -59,12 +60,12 @@
   - **非法移动测试**（测试作用域逃逸）
 
 ## 任务清单
-- [ ] 实现 AST 遍历器（Walker/Visitor）。
-- [ ] 实现不可变更新机制（Path Copying）。
-- [ ] 实现 `replace`, `remove`, `insert` 基础操作。
-- [ ] 集成 ScopeManager，实现 `rename` 操作（含冲突检测）。
-- [ ] 实现 `move` 操作的安全检查逻辑。
-- [ ] 编写测试用例，覆盖各种边缘情况。
+- [x] 实现 AST 遍历器（Walker/Visitor）。
+- [x] 实现不可变更新机制（Path Copying）。
+- [x] 实现 `replace`, `remove`, `insert` 基础操作。
+- [x] 集成 ScopeManager，实现 `rename` 操作（含冲突检测）。
+- [x] 实现 `move` 操作的安全检查逻辑。
+- [x] 编写测试用例，覆盖各种边缘情况。
 
 ## 验收标准
 - ✅ 所有编辑操作均返回新的 AST 根节点，原 AST 保持不变。

@@ -2,7 +2,7 @@ CC ?= gcc
 CFLAGS ?= -std=c11 -Wall -Wextra -O2
 LDFLAGS ?=
 
-SRC := src/main.c src/lexer.c src/parser.c src/ast_print.c src/scope.c src/edit.c
+SRC := src/main.c src/lexer.c src/parser.c src/ast_print.c src/scope.c src/edit.c src/codegen.c
 INC := -Iinclude
 
 BIN := build/quickjsflow
@@ -18,33 +18,33 @@ $(BIN): $(SRC)
 	@mkdir -p build
 	$(CC) $(CFLAGS) $(INC) -o $@ $(SRC) $(LDFLAGS)
 
-build/test_integration: test/test_integration.c src/lexer.c src/parser.c src/ast_print.c src/scope.c src/edit.c
+build/test_integration: test/test_integration.c src/lexer.c src/parser.c src/ast_print.c src/scope.c src/edit.c src/codegen.c
 	@mkdir -p build
 	$(CC) $(CFLAGS) $(INC) -o $@ test/test_integration.c src/lexer.c src/parser.c src/ast_print.c src/scope.c src/edit.c $(LDFLAGS)
 
-build/test_roundtrip: test/test_roundtrip.c src/lexer.c src/parser.c src/ast_print.c src/scope.c src/edit.c
+build/test_roundtrip: test/test_roundtrip.c src/lexer.c src/parser.c src/ast_print.c src/scope.c src/edit.c src/codegen.c
 	@mkdir -p build
-	$(CC) $(CFLAGS) $(INC) -o $@ test/test_roundtrip.c src/lexer.c src/parser.c src/ast_print.c src/scope.c src/edit.c $(LDFLAGS)
+	$(CC) $(CFLAGS) $(INC) -o $@ test/test_roundtrip.c src/lexer.c src/parser.c src/ast_print.c src/scope.c src/edit.c src/codegen.c $(LDFLAGS)
 
-build/test_expressions: test/test_expressions.c src/lexer.c src/parser.c src/ast_print.c src/scope.c src/edit.c
+build/test_expressions: test/test_expressions.c src/lexer.c src/parser.c src/ast_print.c src/scope.c src/edit.c src/codegen.c
 	@mkdir -p build
 	$(CC) $(CFLAGS) $(INC) -o $@ test/test_expressions.c src/lexer.c src/parser.c src/ast_print.c src/scope.c src/edit.c $(LDFLAGS)
 
-build/test_statements: test/test_statements.c src/lexer.c src/parser.c src/ast_print.c src/scope.c src/edit.c
+build/test_statements: test/test_statements.c src/lexer.c src/parser.c src/ast_print.c src/scope.c src/edit.c src/codegen.c
 	@mkdir -p build
 	$(CC) $(CFLAGS) $(INC) -o $@ test/test_statements.c src/lexer.c src/parser.c src/ast_print.c src/scope.c src/edit.c $(LDFLAGS)
 
-build/test_phase1_full: test/test_phase1_full.c src/lexer.c src/parser.c src/ast_print.c src/scope.c src/edit.c
+build/test_phase1_full: test/test_phase1_full.c src/lexer.c src/parser.c src/ast_print.c src/scope.c src/edit.c src/codegen.c
 	@mkdir -p build
 	$(CC) $(CFLAGS) $(INC) -o $@ test/test_phase1_full.c src/lexer.c src/parser.c src/ast_print.c src/scope.c src/edit.c $(LDFLAGS)
 
-build/test_scope: test/test_scope.c src/lexer.c src/parser.c src/ast_print.c src/scope.c src/edit.c
+build/test_scope: test/test_scope.c src/lexer.c src/parser.c src/ast_print.c src/scope.c src/edit.c src/codegen.c
 	@mkdir -p build
 	$(CC) $(CFLAGS) $(INC) -o $@ test/test_scope.c src/lexer.c src/parser.c src/ast_print.c src/scope.c src/edit.c $(LDFLAGS)
 
-build/test_edit: test/test_edit.c src/lexer.c src/parser.c src/ast_print.c src/scope.c src/edit.c
+build/test_edit: test/test_edit.c src/lexer.c src/parser.c src/ast_print.c src/scope.c src/edit.c src/codegen.c
 	@mkdir -p build
-	$(CC) $(CFLAGS) $(INC) -o $@ test/test_edit.c src/lexer.c src/parser.c src/ast_print.c src/scope.c src/edit.c $(LDFLAGS)
+	$(CC) $(CFLAGS) $(INC) -o $@ test/test_edit.c src/lexer.c src/parser.c src/ast_print.c src/scope.c src/edit.c src/codegen.c $(LDFLAGS)
 
 test: tests
 	./build/test_integration

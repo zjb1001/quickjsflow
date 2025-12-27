@@ -58,12 +58,12 @@
   - **Formatting Test**：验证缩进、括号、注释的输出效果。
 
 ## 任务清单
-- [ ] 实现基础 Printer 框架（缩进管理、Buffer）。
-- [ ] 实现所有 AST 节点的打印逻辑（Statement, Expression, Declaration）。
-- [ ] 实现运算符优先级判断，自动添加括号。
-- [ ] 实现注释打印逻辑（Leading/Trailing）。
-- [ ] 集成 Source Map 生成逻辑。
-- [ ] 编写 Round-trip 测试和快照测试。
+- [x] 实现基础 Printer 框架（缩进管理、Buffer）。
+- [x] 实现所有 AST 节点的打印逻辑（Statement, Expression, Declaration）。
+- [x] 实现运算符优先级判断，自动添加括号。
+- [x] 实现注释打印逻辑（Leading/Trailing）。
+- [x] 集成 Source Map 生成逻辑。
+- [x] 编写 Round-trip 测试和快照测试。
 
 ## 验收标准
 - ✅ **结构等价性**：`parse(generate(ast))` 得到的 AST 应与原 AST 结构一致（忽略位置信息）。

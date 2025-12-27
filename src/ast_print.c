@@ -38,6 +38,33 @@ void astvec_push(AstVec *v, AstNode *n) {
     v->items[v->count++] = n;
 }
 
+void commentvec_push(Program *p, Comment *c) {
+    if (!p || !c) return;
+    if (p->comment_count + 1 > p->comment_capacity) {
+        size_t cap = p->comment_capacity ? p->comment_capacity * 2 : 4;
+        Comment **items = (Comment **)realloc(p->comments, cap * sizeof(Comment *));
+        if (!items) return;
+        p->comments = items;
+        p->comment_capacity = cap;
+    }
+    p->comments[p->comment_count++] = c;
+}
+
+Comment *comment_clone(const Comment *c) {
+    if (!c) return NULL;
+    Comment *nc = (Comment *)calloc(1, sizeof(Comment));
+    if (!nc) return NULL;
+    nc->is_block = c->is_block;
+    if (c->text) {
+        size_t len = strlen(c->text);
+        nc->text = (char *)malloc(len + 1);
+        if (nc->text) memcpy(nc->text, c->text, len + 1);
+    }
+    nc->start = c->start;
+    nc->end = c->end;
+    return nc;
+}
+
 static AstNode *new_node(AstNodeType t) {
     AstNode *n = (AstNode *)calloc(1, sizeof(AstNode));
     if (n) {
@@ -52,6 +79,9 @@ AstNode *ast_program(void) {
     if (!n) return NULL;
     Program *p = (Program *)calloc(1, sizeof(Program));
     astvec_init(&p->body);
+    p->comments = NULL;
+    p->comment_count = 0;
+    p->comment_capacity = 0;
     n->data = p;
     return n;
 }
@@ -763,6 +793,12 @@ static AstNode *clone_node(const AstNode *n) {
             for (size_t i = 0; orig && i < orig->body.count; ++i) {
                 astvec_push(&cp->body, clone_node(orig->body.items[i]));
             }
+            if (orig) {
+                for (size_t i = 0; i < orig->comment_count; ++i) {
+                    Comment *cc = comment_clone(orig->comments[i]);
+                    if (cc) commentvec_push(cp, cc);
+                }
+            }
             c->data = cp;
             break;
         }
@@ -1127,6 +1163,11 @@ static AstNode *clone_node(const AstNode *n) {
 static void free_program(Program *p) {
     for (size_t i = 0; i < p->body.count; ++i) ast_release(p->body.items[i]);
     free(p->body.items);
+    for (size_t i = 0; i < p->comment_count; ++i) {
+        Comment *c = p->comments[i];
+        if (c) { free(c->text); free(c); }
+    }
+    free(p->comments);
     free(p);
 }
 
