@@ -82,7 +82,64 @@
 
 ---
 
-## 🚀 快速开始
+## 🚀 CLI 工具和插件系统
+
+QuickJSFlow 提供了强大的命令行工具和可扩展的插件系统。
+
+### 快速开始
+
+```bash
+# 构建
+make clean && make
+
+# 运行测试
+./scripts/test-cli.sh
+
+# 查看帮助
+./build/quickjsflow
+```
+
+### 核心命令
+
+```bash
+# 解析 JavaScript 生成 AST
+./build/quickjsflow parse input.js
+
+# 生成代码
+./build/quickjsflow generate input.js
+
+# 语法检查
+./build/quickjsflow check input.js
+
+# 控制流图分析
+./build/quickjsflow cfg function.js mermaid
+
+# 应用插件转换
+./build/quickjsflow run input.js --plugin remove-console
+```
+
+### 内置插件
+
+- **remove-console** - 移除所有 `console.log()` 调用
+- **remove-debugger** - 移除所有 `debugger` 语句
+
+### 示例：清理生产代码
+
+```bash
+# 移除开发调试代码
+./build/quickjsflow run src/app.js --plugin remove-console > dist/app.js
+```
+
+### 完整文档
+
+- 📖 [完整用户指南](docs/CLI_PLUGIN_GUIDE.md)
+- 📋 [快速参考](docs/CLI_QUICK_REFERENCE.md)
+- 🔧 [插件开发指南](docs/ISSUE_08_IMPLEMENTATION.md)
+- 🇨🇳 [中文实现总结](docs/ISSUE_08_SUMMARY_CN.md)
+
+---
+
+## 📖 开发指南
 
 ### 查看完整执行计划
 → [完整 Issue 清单与执行计划](issues/00-完整Issue清单与执行计划.md)
@@ -94,7 +151,7 @@
 3. **作用域规范**：[Issue 13 - 作用域分析细化实现规范](issues/13-作用域分析细化实现规范.md)
 4. **集成测试**：[Issue 11 - 集成测试与模块边界规范](issues/11-集成测试与模块边界规范.md)
 
-### 然后开始实现
+### 模块实现路径
 
 1. **Lexer**：[Issue 02](issues/02-词法分析与错误恢复-Lexer.md)
 2. **Parser**：[Issue 03](issues/03-语法解析与ESTree-AST结构.md)
@@ -113,6 +170,25 @@
 
 ## 📊 关键特性总览
 
+### CLI 工具特性
+
+- ✅ 词法分析和语法解析
+- ✅ AST 生成和代码生成
+- ✅ 语法和作用域检查
+- ✅ 控制流图分析（JSON/DOT/Mermaid）
+- ✅ 可扩展的插件系统
+- ✅ 多种输出格式支持
+
+### 插件系统特性
+
+- 🔌 基于访问者模式的 AST 转换
+- 🎯 节点类型特定的转换器
+- 🔄 支持节点增删改
+- 📦 内置实用插件
+- 🛠️ 易于扩展的架构
+
+### 核心功能状态
+
 | 特性 | 状态 | 说明 |
 |------|------|------|
 | **ECMAScript 阶段 1 支持** | 🔴 MVP | 基础语法 + 控制流 (85% 覆盖) |
@@ -122,27 +198,13 @@
 | **SourceMap 生成** | 🔴 MVP | 位置映射完整性测试 |
 | **错误恢复** | 🔴 MVP | 容错 L1/L2，部分 AST 输出 |
 | **集成测试框架** | 🔴 MVP | 500+ 用例，Round-trip 验证 |
-| **CLI 工具** | 🔴 MVP | parse/print/edit/cfg 命令 |
-| **Node SDK** | 🔴 MVP | 同步/流式 API |
+| **CLI 工具** | ✅ **已完成** | parse/generate/check/cfg/run 命令 |
+| **插件系统** | ✅ **已完成** | 访问者模式 + 内置插件 |
 | --- | --- | --- |
 | **ES2021+ 现代特性** | 🟡 Phase 2 | 箭头函数、解构、async/await 等 |
-| **增量编辑优化** | 🟡 Phase 2 | Diff 算法 + 范围重解析 |
-| **数据流分析** | 🟡 Phase 2 | 可选的 CFG + Def-Use 链 |
-| **TypeScript 支持** | 🔴 排除 | 超出范围，可作为扩展 |
-
----
-
-## 🔄 核心流程示例
-
-### 解析流程
+| **插件转换流程
 ```
-JavaScript 源码
-    ↓
-[Lexer] → Token 流
-    ↓
-[Parser] → ESTree AST
-    ↓
-[ScopeManager] → Scope Chain + Symbol Table
+源码 → Parse → AST → Plugin Visitor → 转换后 AST → Codegen → 输出代码
 ```
 
 ### 编辑流程
@@ -165,9 +227,75 @@ JavaScript 源码
 
 ---
 
+## 💼 使用场景
+
+### 1. 代码清理
+```bash
+# 移除生产环境中的 debug 代码
+./build/quickjsflow run src/app.js --plugin remove-console > dist/app.js
+```
+
+### 2. 代码分析
+```bash
+# 检查代码质量
+./build/quickjsflow check src/main.js
+
+# 分析控制流
+./build/quickjsflow cfg src/main.js dot | dot -Tpng > flow.png
+```
+
+### 3. 代码转换
+```bash
+# 解析、转换、生成
+./build/quickjsflow parse input.js > ast.json
+# 修改 AST...
+./build/quickjsflow generate modified_ast.json > output.js
+```
+
+### 4. CI/CD 集成
+```bash
+# 在构建流程中自动清理代码
+#!/bin/bash
+for file in src/**/*.js; do
+  ./build/quickjsflow run "$file" --plugin remove-console > "dist/${file}"
+done
+[ScopeManager] → Scope Chain + Symbol Table
+```
+
+### 编辑流程
+```
+原 AST
+    ↓
+[Edit API] Insert/Replace/Remove/Move/Rename
+    ↓
+新 AST (不可变，保留位置信息)
+7. **可扩展插件系统**：基于访问者模式，易于创建自定义代码转换工具
+
+---
+
+## ⚡ 性能特点
+
+- 🚀 快速解析和生成
+- 💾 低内存占用
+- 🎯 高效的 AST 遍历
+- 📊 可扩展的插件架构
+- 🔧 零依赖的 C 实现
+    ↓
+[Codegen] → 目标源码 + SourceMap
+```
+
+### 验证流程 (Round-trip)
+```
+源码 → Parse → AST → Edit → 新 AST → Codegen → 目标源码 → Parse → 新 AST
+↑                                                            ↓
+└────────── 结构等价检查 ─────────────────────────────────────┘
+```
+
+---
+
 ## 📈 进度追踪
 
-**阶段状态**：设计完成 ✅，可开始实现
+**阶段状态**：设计完成 ✅，可开始实现 **完成：6个CLI命令 + 插件系统**
 
 - [x] 需求澄清与架构设计（Issue 01）
 - [x] 语法范围明确（Issue 12）

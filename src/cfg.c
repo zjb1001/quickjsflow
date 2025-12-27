@@ -48,7 +48,7 @@ void qjs_bb_add_stmt(BasicBlock *bb, const AstNode *stmt) {
     
     if (bb->stmt_count >= bb->stmt_capacity) {
         bb->stmt_capacity = bb->stmt_capacity == 0 ? 16 : bb->stmt_capacity * 2;
-        AstNode **new_stmts = (AstNode **)realloc(bb->statements, bb->stmt_capacity * sizeof(AstNode *));
+        const AstNode **new_stmts = (const AstNode **)realloc((void *)bb->statements, bb->stmt_capacity * sizeof(AstNode *));
         if (!new_stmts) return;
         bb->statements = new_stmts;
     }
@@ -677,6 +677,7 @@ static const char *edge_type_string(CFGEdgeType type) {
     }
 }
 
+static const char *ast_type_string(AstNodeType type) __attribute__((unused));
 static const char *ast_type_string(AstNodeType type) {
     switch (type) {
         case AST_ExpressionStatement: return "ExpressionStatement";
