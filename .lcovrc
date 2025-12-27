@@ -1,0 +1,16 @@
+# LCOV Configuration
+# Exclude patterns for coverage reporting
+
+# Exclude test files
+test/*
+
+# Exclude build directory
+build/*
+
+# Exclude system headers
+/usr/include/*
+/usr/lib/*
+
+# Exclude external dependencies (if any)
+external/*
+vendor/*

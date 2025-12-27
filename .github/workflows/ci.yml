@@ -1,0 +1,146 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+    branches: [ main, master, develop ]
+
+jobs:
+  build-and-test:
+    name: Build and Test
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        compiler: [gcc, clang]
+        exclude:
+          - os: macos-latest
+            compiler: gcc
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup environment
+      run: |
+        if [ "${{ matrix.os }}" = "ubuntu-latest" ]; then
+          sudo apt-get update
+          sudo apt-get install -y lcov valgrind
+        elif [ "${{ matrix.os }}" = "macos-latest" ]; then
+          brew install lcov
+        fi
+
+    - name: Build project
+      env:
+        CC: ${{ matrix.compiler }}
+      run: make all
+
+    - name: Build tests
+      env:
+        CC: ${{ matrix.compiler }}
+      run: make tests
+
+    - name: Run tests
+      run: make test
+
+    - name: Run memory check (Linux only)
+      if: matrix.os == 'ubuntu-latest'
+      run: |
+        for test in build/test_*; do
+          echo "Running valgrind on $test"
+          valgrind --leak-check=full --error-exitcode=1 --quiet $test || exit 1
+        done
+
+  coverage:
+    name: Code Coverage
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y lcov
+
+    - name: Build with coverage
+      run: make coverage
+
+    - name: Run tests with coverage
+      run: make test-coverage
+
+    - name: Generate coverage report
+      run: make coverage-report
+
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v4
+      with:
+        files: ./build/coverage/lcov.info
+        flags: unittests
+        name: codecov-quickjsflow
+        fail_ci_if_error: false
+        verbose: true
+
+    - name: Check coverage threshold
+      run: |
+        COVERAGE=$(lcov --summary build/coverage/lcov.info 2>&1 | grep "lines" | awk '{print $2}' | sed 's/%//')
+        echo "Coverage: $COVERAGE%"
+        if (( $(echo "$COVERAGE < 80" | bc -l) )); then
+          echo "❌ Coverage is below 80% threshold"
+          exit 1
+        fi
+        echo "✅ Coverage meets 80% threshold"
+
+  benchmark:
+    name: Performance Benchmark
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Build benchmark
+      run: make benchmark
+
+    - name: Run benchmark
+      run: make run-benchmark
+
+    - name: Upload benchmark results
+      uses: actions/upload-artifact@v4
+      with:
+        name: benchmark-results
+        path: build/benchmark/results.txt
+
+  fuzzing:
+    name: Fuzz Testing
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install AFL++
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y afl++ build-essential
+
+    - name: Build fuzzer
+      run: make fuzz-build
+
+    - name: Run fuzzing (short duration)
+      timeout-minutes: 10
+      continue-on-error: true
+      run: make fuzz-test-ci
+
+    - name: Check for crashes
+      run: |
+        if [ -d "build/fuzz/crashes" ] && [ "$(ls -A build/fuzz/crashes)" ]; then
+          echo "❌ Fuzzer found crashes!"
+          ls -la build/fuzz/crashes
+          exit 1
+        fi
+        echo "✅ No crashes found"
