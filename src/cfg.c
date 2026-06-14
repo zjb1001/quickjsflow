@@ -301,31 +301,77 @@ static BasicBlock *cfg_build_statement(CFG *cfg, const AstNode *stmt, BasicBlock
         
         case AST_ForStatement: {
             ForStatement *for_stmt = (ForStatement *)stmt->data;
-            
+
             // 创建循环体块
             BasicBlock *loop_block = qjs_bb_new(cfg->block_count);
             cfg_add_block(cfg, loop_block);
-            
+
             BasicBlock *test_block = current;
             if (for_stmt->test) {
                 cfg_add_edge(cfg, test_block, loop_block, CFG_EDGE_TRUE, for_stmt->test);
             } else {
                 cfg_add_edge(cfg, test_block, loop_block, CFG_EDGE_NORMAL, NULL);
             }
-            
+
             // 创建退出块
             BasicBlock *exit_block = qjs_bb_new(cfg->block_count);
             cfg_add_block(cfg, exit_block);
             if (for_stmt->test) {
                 cfg_add_edge(cfg, test_block, exit_block, CFG_EDGE_FALSE, for_stmt->test);
             }
-            
+
             // 递归处理循环体
             BasicBlock *loop_end = cfg_build_statement(cfg, for_stmt->body, loop_block, exit_block);
             if (loop_end) {
                 cfg_add_edge(cfg, loop_end, test_block, CFG_EDGE_CONTINUE, NULL);
             }
-            
+
+            return exit_block;
+        }
+
+        case AST_ForOfStatement: {
+            ForOfStatement *fos = (ForOfStatement *)stmt->data;
+            if (!fos) return current;
+
+            // 循环体块
+            BasicBlock *loop_block = qjs_bb_new(cfg->block_count);
+            cfg_add_block(cfg, loop_block);
+            cfg_add_edge(cfg, current, loop_block, CFG_EDGE_TRUE, fos->right);
+
+            // 退出块
+            BasicBlock *exit_block = qjs_bb_new(cfg->block_count);
+            cfg_add_block(cfg, exit_block);
+            cfg_add_edge(cfg, current, exit_block, CFG_EDGE_FALSE, fos->right);
+
+            // 递归处理循环体
+            BasicBlock *loop_end = cfg_build_statement(cfg, fos->body, loop_block, exit_block);
+            if (loop_end) {
+                cfg_add_edge(cfg, loop_end, current, CFG_EDGE_CONTINUE, NULL);
+            }
+
+            return exit_block;
+        }
+
+        case AST_ForInStatement: {
+            ForInStatement *fis = (ForInStatement *)stmt->data;
+            if (!fis) return current;
+
+            // 循环体块
+            BasicBlock *loop_block = qjs_bb_new(cfg->block_count);
+            cfg_add_block(cfg, loop_block);
+            cfg_add_edge(cfg, current, loop_block, CFG_EDGE_TRUE, fis->right);
+
+            // 退出块
+            BasicBlock *exit_block = qjs_bb_new(cfg->block_count);
+            cfg_add_block(cfg, exit_block);
+            cfg_add_edge(cfg, current, exit_block, CFG_EDGE_FALSE, fis->right);
+
+            // 递归处理循环体
+            BasicBlock *loop_end = cfg_build_statement(cfg, fis->body, loop_block, exit_block);
+            if (loop_end) {
+                cfg_add_edge(cfg, loop_end, current, CFG_EDGE_CONTINUE, NULL);
+            }
+
             return exit_block;
         }
         

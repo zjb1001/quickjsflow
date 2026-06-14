@@ -312,6 +312,84 @@ static void collect_decls(ScopeManager *sm, Scope *scope, AstNode *node, int all
             if (fs->body) collect_decls(sm, loop_scope, fs->body, 1);
             break;
         }
+        case AST_ForOfStatement: {
+            ForOfStatement *fos = (ForOfStatement *)node->data;
+            Scope *loop_scope = scope;
+            if (fos && fos->left && fos->left->type == AST_VariableDeclaration) {
+                VariableDeclaration *vd = (VariableDeclaration *)fos->left->data;
+                if (vd->kind == VD_Let || vd->kind == VD_Const) {
+                    loop_scope = new_scope(sm, SCOPE_FOR, scope, node);
+                }
+            }
+            if (fos) {
+                if (fos->left) collect_decls(sm, loop_scope, fos->left, 1);
+                if (fos->right) collect_decls(sm, loop_scope, fos->right, 1);
+                if (fos->body) collect_decls(sm, loop_scope, fos->body, 1);
+            }
+            break;
+        }
+        case AST_ForInStatement: {
+            ForInStatement *fis = (ForInStatement *)node->data;
+            Scope *loop_scope = scope;
+            if (fis && fis->left && fis->left->type == AST_VariableDeclaration) {
+                VariableDeclaration *vd = (VariableDeclaration *)fis->left->data;
+                if (vd->kind == VD_Let || vd->kind == VD_Const) {
+                    loop_scope = new_scope(sm, SCOPE_FOR, scope, node);
+                }
+            }
+            if (fis) {
+                if (fis->left) collect_decls(sm, loop_scope, fis->left, 1);
+                if (fis->right) collect_decls(sm, loop_scope, fis->right, 1);
+                if (fis->body) collect_decls(sm, loop_scope, fis->body, 1);
+            }
+            break;
+        }
+        case AST_ClassDeclaration: {
+            ClassDeclaration *cd = (ClassDeclaration *)node->data;
+            if (cd && cd->id) {
+                const char *name = identifier_name(cd->id);
+                add_binding(scope, BIND_LET, name, cd->id, cd->id->start);
+            }
+            Scope *class_scope = new_scope(sm, SCOPE_BLOCK, scope, node);
+            if (cd) {
+                if (cd->superClass) collect_decls(sm, class_scope, cd->superClass, 1);
+                collect_decls_list(sm, class_scope, &cd->body);
+            }
+            break;
+        }
+        case AST_ClassExpression: {
+            ClassExpression *ce = (ClassExpression *)node->data;
+            Scope *class_scope = new_scope(sm, SCOPE_BLOCK, scope, node);
+            if (ce && ce->id) {
+                const char *name = identifier_name(ce->id);
+                add_binding(class_scope, BIND_LET, name, ce->id, ce->id->start);
+            }
+            if (ce) {
+                if (ce->superClass) collect_decls(sm, class_scope, ce->superClass, 1);
+                collect_decls_list(sm, class_scope, &ce->body);
+            }
+            break;
+        }
+        case AST_ArrowFunctionExpression: {
+            ArrowFunctionExpression *afe = (ArrowFunctionExpression *)node->data;
+            Scope *fn_scope = new_scope(sm, SCOPE_FUNCTION, scope, node);
+            if (afe) {
+                for (size_t i = 0; i < afe->params.count; ++i) {
+                    AstNode *p = afe->params.items[i];
+                    const char *pname = identifier_name(p);
+                    add_binding(fn_scope, BIND_PARAM, pname, p, p ? p->start : (Position){0, 0});
+                }
+                if (afe->body) collect_decls(sm, fn_scope, afe->body, 0);
+            }
+            break;
+        }
+        case AST_TemplateLiteral: {
+            TemplateLiteral *tl = (TemplateLiteral *)node->data;
+            if (tl)
+                for (size_t i = 0; i < tl->expressions.count; ++i)
+                    collect_decls(sm, scope, tl->expressions.items[i], 1);
+            break;
+        }
         case AST_SwitchStatement: {
             SwitchStatement *ss = (SwitchStatement *)node->data;
             Scope *sw_scope = new_scope(sm, SCOPE_BLOCK, scope, node);
@@ -341,10 +419,20 @@ static void collect_decls(ScopeManager *sm, Scope *scope, AstNode *node, int all
             ImportDeclaration *id = (ImportDeclaration *)node->data;
             for (size_t i = 0; i < id->specifiers.count; ++i) {
                 AstNode *spec = id->specifiers.items[i];
-                if (!spec || spec->type != AST_ImportSpecifier) continue;
-                ImportSpecifier *is = (ImportSpecifier *)spec->data;
-                const char *local = identifier_name(is->local);
-                add_binding(scope, BIND_IMPORT, local, is->local, is->local ? is->local->start : (Position){0, 0});
+                if (!spec) continue;
+                if (spec->type == AST_ImportSpecifier) {
+                    ImportSpecifier *is = (ImportSpecifier *)spec->data;
+                    const char *local = identifier_name(is->local);
+                    add_binding(scope, BIND_IMPORT, local, is->local, is->local ? is->local->start : (Position){0, 0});
+                } else if (spec->type == AST_ImportDefaultSpecifier) {
+                    ImportDefaultSpecifier *ids = (ImportDefaultSpecifier *)spec->data;
+                    const char *local = identifier_name(ids->local);
+                    add_binding(scope, BIND_IMPORT, local, ids->local, ids->local ? ids->local->start : (Position){0, 0});
+                } else if (spec->type == AST_ImportNamespaceSpecifier) {
+                    ImportNamespaceSpecifier *ins = (ImportNamespaceSpecifier *)spec->data;
+                    const char *local = identifier_name(ins->local);
+                    add_binding(scope, BIND_IMPORT, local, ins->local, ins->local ? ins->local->start : (Position){0, 0});
+                }
             }
             break;
         }
@@ -546,6 +634,61 @@ static void collect_refs(ScopeManager *sm, Scope *scope, AstNode *node, int allo
             if (fs->test) collect_refs(sm, loop_scope, fs->test, 1);
             if (fs->update) collect_refs(sm, loop_scope, fs->update, 1);
             if (fs->body) collect_refs(sm, loop_scope, fs->body, 1);
+            break;
+        }
+        case AST_ForOfStatement: {
+            ForOfStatement *fos = (ForOfStatement *)node->data;
+            Scope *loop_scope = scoped ? scoped : current;
+            if (fos) {
+                if (fos->left) collect_refs(sm, loop_scope, fos->left, 1);
+                if (fos->right) collect_refs(sm, loop_scope, fos->right, 1);
+                if (fos->body) collect_refs(sm, loop_scope, fos->body, 1);
+            }
+            break;
+        }
+        case AST_ForInStatement: {
+            ForInStatement *fis = (ForInStatement *)node->data;
+            Scope *loop_scope = scoped ? scoped : current;
+            if (fis) {
+                if (fis->left) collect_refs(sm, loop_scope, fis->left, 1);
+                if (fis->right) collect_refs(sm, loop_scope, fis->right, 1);
+                if (fis->body) collect_refs(sm, loop_scope, fis->body, 1);
+            }
+            break;
+        }
+        case AST_ClassDeclaration: {
+            ClassDeclaration *cd = (ClassDeclaration *)node->data;
+            Scope *class_scope = scoped ? scoped : current;
+            if (cd) {
+                if (cd->superClass) collect_refs(sm, class_scope, cd->superClass, 1);
+                collect_refs_list(sm, class_scope, &cd->body);
+            }
+            break;
+        }
+        case AST_ClassExpression: {
+            ClassExpression *ce = (ClassExpression *)node->data;
+            Scope *class_scope = scoped ? scoped : current;
+            if (ce) {
+                if (ce->superClass) collect_refs(sm, class_scope, ce->superClass, 1);
+                collect_refs_list(sm, class_scope, &ce->body);
+            }
+            break;
+        }
+        case AST_ArrowFunctionExpression: {
+            ArrowFunctionExpression *afe = (ArrowFunctionExpression *)node->data;
+            Scope *fn_scope = scoped ? scoped : current;
+            if (afe) {
+                for (size_t i = 0; i < afe->params.count; ++i)
+                    collect_refs(sm, fn_scope, afe->params.items[i], 1);
+                if (afe->body) collect_refs(sm, fn_scope, afe->body, 1);
+            }
+            break;
+        }
+        case AST_TemplateLiteral: {
+            TemplateLiteral *tl = (TemplateLiteral *)node->data;
+            if (tl)
+                for (size_t i = 0; i < tl->expressions.count; ++i)
+                    collect_refs(sm, current, tl->expressions.items[i], 1);
             break;
         }
         case AST_SwitchStatement: {

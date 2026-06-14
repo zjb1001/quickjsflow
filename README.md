@@ -264,11 +264,19 @@ A：参考 [docs/cli-quick-reference.md](docs/cli-quick-reference.md) 中的插�
 
 MIT License - 详见 [LICENSE](LICENSE)
 
+## 管道演示
+
+一键运行全管道演示，展示从词法分析到代码生成的完整流程：
+
+```bash
+bash scripts/pipeline-showcase.sh
+```
+
 ## 贡献
 
 欢迎提交 Issue 和 Pull Request。
 
 ---
 
-**最后更新**：2025-12-28  
-**版本**：1.0.0 MVP + Phase 2 部分支持
+**最后更新**：2026-06-14  
+**版本**：v0.1.0 Alpha — 14 modules, 295 tests, 零依赖，Issue 02-14 全部完成

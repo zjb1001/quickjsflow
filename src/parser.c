@@ -36,6 +36,12 @@ void parser_init(Parser *p, const char *input, size_t length) {
     lexer_init(&p->lx, input, length);
     p->has_lookahead = 0;
     p->comment_sink = NULL;
+    p->arena = NULL;
+}
+
+void parser_set_arena(Parser *p, Arena *arena) {
+    p->arena = arena;
+    ast_set_arena(arena);
 }
 
 // forward decls
@@ -500,7 +506,7 @@ static AstNode *parse_for(Parser *p) {
         left = parse_expression(p);
     }
 
-    // Check for 'of' keyword
+    // Check for 'of' keyword (for-of loop) BEFORE consuming first semicolon
     Token look = peek_tok(p);
     if (is_keyword(&look, "of")) {
         next_tok(p); // consume 'of'
@@ -511,8 +517,8 @@ static AstNode *parse_for(Parser *p) {
         Position e = body ? body->end : pos_end(&rparen);
         return ast_for_of_statement(left, right, body, s, e);
     }
-    
-    // Check for 'in' keyword
+
+    // Check for 'in' keyword (for-in loop) BEFORE consuming first semicolon
     if (is_keyword(&look, "in")) {
         next_tok(p); // consume 'in'
         AstNode *right = parse_expression(p);
@@ -523,7 +529,12 @@ static AstNode *parse_for(Parser *p) {
         return ast_for_in_statement(left, right, body, s, e);
     }
 
-    // Regular for loop
+    // Regular for loop: consume first ';' if present (after init, before test)
+    if (is_punct(&look, ";")) {
+        next_tok(p);
+    }
+
+    // Parse test expression
     AstNode *test = NULL;
     t = peek_tok(p);
     if (!is_punct(&t, ";")) { test = parse_expression(p); }
@@ -727,7 +738,37 @@ static AstNode *parse_primary(Parser *p) {
     if (is_punct(&t, "(")) {
         next_tok(p); // consume '('
         Position s = pos_start(&t);
+
+        /* Handle empty parens: () */
+        Token look = peek_tok(p);
+        if (is_punct(&look, ")")) {
+            Position e = pos_end(&look);
+            Token rp = next_tok(p); /* consume ')' */
+            token_free(&t);
+            token_free(&rp);
+            /* Return a special empty-sequence marker for arrow () => ... or grouped () */
+            AstNode *empty = ast_identifier("", s, e);
+            return empty;
+        }
+
         AstNode *expr = parse_expression(p);
+
+        /* Handle comma-separated expressions inside parens: (a, b, c)
+         * Used for arrow function params and parenthesized comma expressions. */
+        look = peek_tok(p);
+        if (is_punct(&look, ",")) {
+            /* Build a left-associative comma chain: BinaryExpr(,, a, BinaryExpr(,, b, c)) */
+            while (is_punct(&look, ",")) {
+                Token comma = next_tok(p); /* consume ',' */
+                AstNode *right = parse_expression(p);
+                Position cs = expr->start;
+                Position ce = right->end;
+                expr = ast_binary_expression(",", expr, right, cs, ce);
+                token_free(&comma);
+                look = peek_tok(p);
+            }
+        }
+
         Token rparen = peek_tok(p);
         if (!is_punct(&rparen, ")")) {
             AstNode *err = ast_error("ExpectedCloseParen", pos_start(&rparen), pos_end(&rparen));
@@ -742,7 +783,7 @@ static AstNode *parse_primary(Parser *p) {
 
     t = next_tok(p);
 
-    if (is_keyword(&t, "null") || is_keyword(&t, "true") || is_keyword(&t, "false")) {
+    if (is_keyword(&t, "null") || is_keyword(&t, "true") || is_keyword(&t, "false") || is_keyword(&t, "undefined")) {
         return parse_literal_keyword(t);
     }
 
@@ -940,13 +981,42 @@ static AstNode *parse_assignment(Parser *p) {
         ArrowFunctionExpression *afe = (ArrowFunctionExpression *)arrow->data;
         
         // Handle parameters
-        // If left is an identifier, it's a single param
+        // Empty params: () => ...
         if (left && left->type == AST_Identifier) {
+            Identifier *id = (Identifier *)left->data;
+            if (id && id->name && id->name[0] == '\0') {
+                /* Empty marker from () — no params to add */
+                ast_release(left);
+            } else {
+                // Single identifier param: x => ...
+                astvec_push(&afe->params, left);
+            }
+        } else if (left && left->type == AST_BinaryExpression) {
+            // Comma-separated params from (a, b, c) => ...
+            BinaryExpression *be = (BinaryExpression *)left->data;
+            const char *op = be->operator ? be->operator : "";
+            if (strcmp(op, ",") == 0) {
+                /* Flatten comma chain: (a, b, c) → BinaryExpr(,, BinaryExpr(,, a, b), c) */
+                /* Recursively extract identifiers from left-associative comma chain */
+                AstNode *chain[32]; int ci = 0;
+                AstNode *cur = left;
+                while (cur && cur->type == AST_BinaryExpression && ci < 31) {
+                    BinaryExpression *b = (BinaryExpression *)cur->data;
+                    if (b->operator && strcmp(b->operator, ",") == 0) {
+                        chain[ci++] = b->right;
+                        cur = b->left;
+                    } else break;
+                }
+                if (cur && ci < 32) chain[ci++] = cur;
+                /* Push in reverse order (leftmost first) */
+                for (int k = ci - 1; k >= 0; k--)
+                    astvec_push(&afe->params, chain[k]);
+            } else {
+                astvec_push(&afe->params, left);
+            }
+        } else if (left) {
+            // Single parenthesized param: (x) => ... or pattern
             astvec_push(&afe->params, left);
-        } else {
-            // TODO: Handle multiple params from parenthesized list
-            // For now, just add the expression as-is
-            if (left) astvec_push(&afe->params, left);
         }
         
         afe->body = body;
@@ -1109,7 +1179,8 @@ static AstNode *parse_class(Parser *p, int is_decl) {
             break;
         }
         // For now, skip method parsing - simplified
-        next_tok(p);
+        Token skipped = next_tok(p);
+        token_free(&skipped);
     }
 
     token_free(&class_tok);

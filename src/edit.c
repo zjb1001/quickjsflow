@@ -520,6 +520,178 @@ static AstNode *rewrite_tree(const AstNode *orig, const RewriteOptions *opt) {
             n->data = nis;
             break;
         }
+        case AST_ImportDefaultSpecifier: {
+            ImportDefaultSpecifier *oids = (ImportDefaultSpecifier *)orig->data;
+            ImportDefaultSpecifier *nids = (ImportDefaultSpecifier *)calloc(1, sizeof(ImportDefaultSpecifier));
+            if (oids) nids->local = rewrite_tree(oids->local, opt);
+            n->data = nids;
+            break;
+        }
+        case AST_ImportNamespaceSpecifier: {
+            ImportNamespaceSpecifier *oins = (ImportNamespaceSpecifier *)orig->data;
+            ImportNamespaceSpecifier *nins = (ImportNamespaceSpecifier *)calloc(1, sizeof(ImportNamespaceSpecifier));
+            if (oins) nins->local = rewrite_tree(oins->local, opt);
+            n->data = nins;
+            break;
+        }
+        case AST_ArrowFunctionExpression: {
+            ArrowFunctionExpression *oafe = (ArrowFunctionExpression *)orig->data;
+            ArrowFunctionExpression *nafe = (ArrowFunctionExpression *)calloc(1, sizeof(ArrowFunctionExpression));
+            astvec_init(&nafe->params);
+            if (oafe) {
+                nafe->is_async = oafe->is_async;
+                for (size_t i = 0; i < oafe->params.count; ++i)
+                    astvec_push(&nafe->params, rewrite_tree(oafe->params.items[i], opt));
+                nafe->body = rewrite_tree(oafe->body, opt);
+            }
+            n->data = nafe;
+            break;
+        }
+        case AST_TemplateLiteral: {
+            TemplateLiteral *otl = (TemplateLiteral *)orig->data;
+            TemplateLiteral *ntl = (TemplateLiteral *)calloc(1, sizeof(TemplateLiteral));
+            astvec_init(&ntl->quasis);
+            astvec_init(&ntl->expressions);
+            if (otl) {
+                for (size_t i = 0; i < otl->quasis.count; ++i)
+                    astvec_push(&ntl->quasis, rewrite_tree(otl->quasis.items[i], opt));
+                for (size_t i = 0; i < otl->expressions.count; ++i)
+                    astvec_push(&ntl->expressions, rewrite_tree(otl->expressions.items[i], opt));
+            }
+            n->data = ntl;
+            break;
+        }
+        case AST_TemplateElement: {
+            TemplateElement *ote = (TemplateElement *)orig->data;
+            TemplateElement *nte = (TemplateElement *)calloc(1, sizeof(TemplateElement));
+            if (ote) { nte->value = dup_cstr(ote->value); nte->tail = ote->tail; }
+            n->data = nte;
+            break;
+        }
+        case AST_SpreadElement: {
+            SpreadElement *ose = (SpreadElement *)orig->data;
+            SpreadElement *nse = (SpreadElement *)calloc(1, sizeof(SpreadElement));
+            if (ose) nse->argument = rewrite_tree(ose->argument, opt);
+            n->data = nse;
+            break;
+        }
+        case AST_RestElement: {
+            RestElement *ore = (RestElement *)orig->data;
+            RestElement *nre = (RestElement *)calloc(1, sizeof(RestElement));
+            if (ore) nre->argument = rewrite_tree(ore->argument, opt);
+            n->data = nre;
+            break;
+        }
+        case AST_ObjectPattern: {
+            ObjectPattern *oop = (ObjectPattern *)orig->data;
+            ObjectPattern *nop = (ObjectPattern *)calloc(1, sizeof(ObjectPattern));
+            astvec_init(&nop->properties);
+            if (oop)
+                for (size_t i = 0; i < oop->properties.count; ++i)
+                    astvec_push(&nop->properties, rewrite_tree(oop->properties.items[i], opt));
+            n->data = nop;
+            break;
+        }
+        case AST_ArrayPattern: {
+            ArrayPattern *oap = (ArrayPattern *)orig->data;
+            ArrayPattern *nap = (ArrayPattern *)calloc(1, sizeof(ArrayPattern));
+            astvec_init(&nap->elements);
+            if (oap)
+                for (size_t i = 0; i < oap->elements.count; ++i)
+                    astvec_push(&nap->elements, rewrite_tree(oap->elements.items[i], opt));
+            n->data = nap;
+            break;
+        }
+        case AST_AssignmentPattern: {
+            AssignmentPattern *oap = (AssignmentPattern *)orig->data;
+            AssignmentPattern *nap = (AssignmentPattern *)calloc(1, sizeof(AssignmentPattern));
+            if (oap) {
+                nap->left = rewrite_tree(oap->left, opt);
+                nap->right = rewrite_tree(oap->right, opt);
+            }
+            n->data = nap;
+            break;
+        }
+        case AST_ForOfStatement: {
+            ForOfStatement *ofos = (ForOfStatement *)orig->data;
+            ForOfStatement *nfos = (ForOfStatement *)calloc(1, sizeof(ForOfStatement));
+            if (ofos) {
+                nfos->left = rewrite_tree(ofos->left, opt);
+                nfos->right = rewrite_tree(ofos->right, opt);
+                nfos->body = rewrite_tree(ofos->body, opt);
+            }
+            n->data = nfos;
+            break;
+        }
+        case AST_ForInStatement: {
+            ForInStatement *ofis = (ForInStatement *)orig->data;
+            ForInStatement *nfis = (ForInStatement *)calloc(1, sizeof(ForInStatement));
+            if (ofis) {
+                nfis->left = rewrite_tree(ofis->left, opt);
+                nfis->right = rewrite_tree(ofis->right, opt);
+                nfis->body = rewrite_tree(ofis->body, opt);
+            }
+            n->data = nfis;
+            break;
+        }
+        case AST_ClassDeclaration: {
+            ClassDeclaration *ocd = (ClassDeclaration *)orig->data;
+            ClassDeclaration *ncd = (ClassDeclaration *)calloc(1, sizeof(ClassDeclaration));
+            astvec_init(&ncd->body);
+            if (ocd) {
+                ncd->id = rewrite_tree(ocd->id, opt);
+                ncd->superClass = rewrite_tree(ocd->superClass, opt);
+                for (size_t i = 0; i < ocd->body.count; ++i)
+                    astvec_push(&ncd->body, rewrite_tree(ocd->body.items[i], opt));
+            }
+            n->data = ncd;
+            break;
+        }
+        case AST_ClassExpression: {
+            ClassExpression *oce = (ClassExpression *)orig->data;
+            ClassExpression *nce = (ClassExpression *)calloc(1, sizeof(ClassExpression));
+            astvec_init(&nce->body);
+            if (oce) {
+                nce->id = rewrite_tree(oce->id, opt);
+                nce->superClass = rewrite_tree(oce->superClass, opt);
+                for (size_t i = 0; i < oce->body.count; ++i)
+                    astvec_push(&nce->body, rewrite_tree(oce->body.items[i], opt));
+            }
+            n->data = nce;
+            break;
+        }
+        case AST_MethodDefinition: {
+            MethodDefinition *omd = (MethodDefinition *)orig->data;
+            MethodDefinition *nmd = (MethodDefinition *)calloc(1, sizeof(MethodDefinition));
+            if (omd) {
+                nmd->key = rewrite_tree(omd->key, opt);
+                nmd->value = rewrite_tree(omd->value, opt);
+                nmd->kind = dup_cstr(omd->kind);
+                nmd->is_static = omd->is_static;
+            }
+            n->data = nmd;
+            break;
+        }
+        case AST_AwaitExpression: {
+            AwaitExpression *oae = (AwaitExpression *)orig->data;
+            AwaitExpression *nae = (AwaitExpression *)calloc(1, sizeof(AwaitExpression));
+            if (oae) nae->argument = rewrite_tree(oae->argument, opt);
+            n->data = nae;
+            break;
+        }
+        case AST_YieldExpression: {
+            YieldExpression *oye = (YieldExpression *)orig->data;
+            YieldExpression *nye = (YieldExpression *)calloc(1, sizeof(YieldExpression));
+            if (oye) { nye->argument = rewrite_tree(oye->argument, opt); nye->delegate = oye->delegate; }
+            n->data = nye;
+            break;
+        }
+        case AST_Super:
+            n->data = calloc(1, sizeof(Super));
+            break;
+        case AST_ThisExpression:
+            n->data = calloc(1, sizeof(ThisExpression));
+            break;
         case AST_ExportNamedDeclaration: {
             ExportNamedDeclaration *oen = (ExportNamedDeclaration *)orig->data;
             ExportNamedDeclaration *nen = (ExportNamedDeclaration *)calloc(1, sizeof(ExportNamedDeclaration));

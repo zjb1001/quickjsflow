@@ -1,16 +1,19 @@
+/* MIT License - Copyright (c) 2026 QuickJSFlow contributors */
 #include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "quickjsflow/codegen.h"
+#include "quickjsflow/arena.h"
 
-// Simple growable string buffer.
+// Simple growable string buffer with optional Arena support.
 typedef struct {
     char *data;
     size_t len;
     size_t cap;
     int error;
+    Arena *arena;   // optional: if set, allocates from arena (no realloc)
 } StrBuf;
 
 typedef struct {
@@ -30,6 +33,7 @@ static void sb_init(StrBuf *sb) {
     sb->len = 0;
     sb->cap = 0;
     sb->error = 0;
+    sb->arena = NULL;
 }
 
 static int sb_reserve(StrBuf *sb, size_t need) {
@@ -37,14 +41,25 @@ static int sb_reserve(StrBuf *sb, size_t need) {
     if (need <= sb->cap) return 1;
     size_t cap = sb->cap ? sb->cap * 2 : 128;
     while (cap < need) cap *= 2;
-    char *p = (char *)realloc(sb->data, cap);
-    if (!p) {
-        sb->error = 1;
-        return 0;
+
+    if (sb->arena) {
+        /* Arena path: allocate new block, copy old content */
+        char *p = (char *)arena_alloc_default(sb->arena, cap);
+        if (!p) { sb->error = 1; return 0; }
+        if (sb->data && sb->len > 0) {
+            memcpy(p, sb->data, sb->len);
+        }
+        sb->data = p;
+        sb->cap = cap;
+        return 1;
+    } else {
+        /* Heap path: realloc */
+        char *p = (char *)realloc(sb->data, cap);
+        if (!p) { sb->error = 1; return 0; }
+        sb->data = p;
+        sb->cap = cap;
+        return 1;
     }
-    sb->data = p;
-    sb->cap = cap;
-    return 1;
 }
 
 static int sb_append_char(StrBuf *sb, char c) {
@@ -65,7 +80,12 @@ static int sb_append(StrBuf *sb, const char *s) {
 }
 
 static void sb_free(StrBuf *sb) {
-    free(sb->data);
+    if (sb->arena) {
+        /* Arena-backed: no-op, memory freed with arena_destroy */
+        sb->data = NULL;
+    } else {
+        free(sb->data);
+    }
     sb->data = NULL;
     sb->len = sb->cap = 0;
     sb->error = 0;
@@ -795,22 +815,52 @@ static int emit_statement(CGCtx *cg, const AstNode *n) {
             ImportDeclaration *id = (ImportDeclaration *)n->data;
             if (!cg_indent(cg)) return 0;
             add_mapping(cg, n);
-            if (!sb_append(&cg->buf, "import {")) return 0;
-            if (id) {
+            if (!sb_append(&cg->buf, "import ")) return 0;
+            if (id && id->specifiers.count > 0) {
+                int has_default = 0, has_named = 0, has_namespace = 0;
                 for (size_t i = 0; i < id->specifiers.count; ++i) {
-                    if (i > 0 && !sb_append(&cg->buf, ", ")) return 0;
-                    ImportSpecifier *is = (ImportSpecifier *)id->specifiers.items[i]->data;
-                    if (!emit_expression(cg, is ? is->imported : NULL, 0)) return 0;
-                    if (is && is->local && is->local != is->imported) {
-                        if (!sb_append(&cg->buf, " as ")) return 0;
-                        if (!emit_expression(cg, is->local, 0)) return 0;
-                    }
+                    AstNode *spec = id->specifiers.items[i];
+                    if (!spec) continue;
+                    if (spec->type == AST_ImportDefaultSpecifier) has_default = 1;
+                    else if (spec->type == AST_ImportNamespaceSpecifier) has_namespace = 1;
+                    else if (spec->type == AST_ImportSpecifier) has_named = 1;
                 }
-                if (!sb_append(&cg->buf, "} from \"")) return 0;
+                int first = 1;
+                for (size_t i = 0; i < id->specifiers.count; ++i) {
+                    AstNode *spec = id->specifiers.items[i];
+                    if (!spec) continue;
+                    if (!first && !sb_append(&cg->buf, ", ")) return 0;
+                    if (spec->type == AST_ImportDefaultSpecifier) {
+                        ImportDefaultSpecifier *ids = (ImportDefaultSpecifier *)spec->data;
+                        if (!emit_expression(cg, ids ? ids->local : NULL, 0)) return 0;
+                    } else if (spec->type == AST_ImportNamespaceSpecifier) {
+                        if (!sb_append(&cg->buf, "* as ")) return 0;
+                        ImportNamespaceSpecifier *ins = (ImportNamespaceSpecifier *)spec->data;
+                        if (!emit_expression(cg, ins ? ins->local : NULL, 0)) return 0;
+                    } else if (spec->type == AST_ImportSpecifier) {
+                        if (first && (has_default || has_namespace)) {
+                            if (!sb_append(&cg->buf, "{ ")) return 0;
+                        } else if (i == 0 || (i > 0 && id->specifiers.items[i-1] && id->specifiers.items[i-1]->type != AST_ImportSpecifier)) {
+                            if (!sb_append(&cg->buf, "{ ")) return 0;
+                        }
+                        ImportSpecifier *is = (ImportSpecifier *)spec->data;
+                        if (!emit_expression(cg, is ? is->imported : NULL, 0)) return 0;
+                        if (is && is->local && is->local != is->imported) {
+                            if (!sb_append(&cg->buf, " as ")) return 0;
+                            if (!emit_expression(cg, is->local, 0)) return 0;
+                        }
+                    }
+                    first = 0;
+                }
+                // Close named import braces if needed
+                if (has_named) {
+                    if (!sb_append(&cg->buf, " }")) return 0;
+                }
+                if (!sb_append(&cg->buf, " from \"")) return 0;
                 if (id->source && !sb_append(&cg->buf, id->source)) return 0;
                 if (!sb_append(&cg->buf, "\";")) return 0;
             } else {
-                if (!sb_append(&cg->buf, "} from \"\";")) return 0;
+                if (!sb_append(&cg->buf, "{} from \"\";")) return 0;
             }
             return cg_newline(cg);
         }
@@ -972,7 +1022,7 @@ CodegenResult codegen_generate(const AstNode *root, const CodegenOptions *option
     CGCtx cg;
     cg_init(&cg, options);
 
-    CodegenResult res = { NULL, NULL };
+    CodegenResult res = { NULL, NULL, NULL };
     if (!root) return res;
 
     if (root->type == AST_Program) {
@@ -1036,7 +1086,8 @@ CodegenResult codegen_generate(const AstNode *root, const CodegenOptions *option
 
 void codegen_result_free(CodegenResult *result) {
     if (!result) return;
-    free(result->code);
+    /* Skip free if arena-backed (memory managed by context/arena) */
+    if (!result->owner_arena) free(result->code);
     free(result->source_map);
     result->code = NULL;
     result->source_map = NULL;

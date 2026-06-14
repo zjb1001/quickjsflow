@@ -4,11 +4,11 @@ LDFLAGS ?=
 COVERAGE_FLAGS := -fprofile-arcs -ftest-coverage --coverage
 AFL_CC ?= afl-gcc
 
-SRC := src/main.c src/lexer.c src/parser.c src/ast_print.c src/scope.c src/edit.c src/codegen.c src/cfg.c src/plugin.c
+SRC := src/main.c src/lexer.c src/parser.c src/ast_print.c src/scope.c src/edit.c src/codegen.c src/cfg.c src/plugin.c src/arena.c src/context.c src/api.c src/diff.c
 INC := -Iinclude
 
 BIN := build/quickjsflow
-TEST_BINS := build/test_integration build/test_roundtrip build/test_expressions build/test_statements build/test_phase1_full build/test_scope build/test_edit build/test_cfg build/test_integration_comprehensive build/test_roundtrip_extended build/test_phase2
+TEST_BINS := build/test_integration build/test_roundtrip build/test_expressions build/test_statements build/test_phase1_full build/test_scope build/test_edit build/test_cfg build/test_integration_comprehensive build/test_roundtrip_extended build/test_phase2 build/test_phase1_improvements build/test_arena build/test_context
 BENCHMARK_BIN := build/benchmark/benchmark
 FUZZ_BIN := build/fuzz/fuzz_target
 
@@ -51,49 +51,61 @@ $(BIN): $(SRC)
 	@mkdir -p build
 	$(CC) $(CFLAGS) $(INC) -o $@ $(SRC) $(LDFLAGS)
 
-build/test_integration: test/test_integration.c src/lexer.c src/parser.c src/ast_print.c src/scope.c src/edit.c src/codegen.c
+build/test_integration: test/test_integration.c src/lexer.c src/parser.c src/ast_print.c src/scope.c src/edit.c src/codegen.c src/arena.c
 	@mkdir -p build
-	$(CC) $(CFLAGS) $(INC) -o $@ test/test_integration.c src/lexer.c src/parser.c src/ast_print.c src/scope.c src/edit.c src/codegen.c $(LDFLAGS)
+	$(CC) $(CFLAGS) $(INC) -o $@ test/test_integration.c src/lexer.c src/parser.c src/ast_print.c src/scope.c src/edit.c src/codegen.c src/arena.c $(LDFLAGS)
 
-build/test_roundtrip: test/test_roundtrip.c src/lexer.c src/parser.c src/ast_print.c src/scope.c src/edit.c src/codegen.c
+build/test_roundtrip: test/test_roundtrip.c src/lexer.c src/parser.c src/ast_print.c src/scope.c src/edit.c src/codegen.c src/arena.c
 	@mkdir -p build
-	$(CC) $(CFLAGS) $(INC) -o $@ test/test_roundtrip.c src/lexer.c src/parser.c src/ast_print.c src/scope.c src/edit.c src/codegen.c $(LDFLAGS)
+	$(CC) $(CFLAGS) $(INC) -o $@ test/test_roundtrip.c src/lexer.c src/parser.c src/ast_print.c src/scope.c src/edit.c src/codegen.c src/arena.c $(LDFLAGS)
 
-build/test_expressions: test/test_expressions.c src/lexer.c src/parser.c src/ast_print.c src/scope.c src/edit.c src/codegen.c
+build/test_expressions: test/test_expressions.c src/lexer.c src/parser.c src/ast_print.c src/scope.c src/edit.c src/codegen.c src/arena.c
 	@mkdir -p build
-	$(CC) $(CFLAGS) $(INC) -o $@ test/test_expressions.c src/lexer.c src/parser.c src/ast_print.c src/scope.c src/edit.c src/codegen.c $(LDFLAGS)
+	$(CC) $(CFLAGS) $(INC) -o $@ test/test_expressions.c src/lexer.c src/parser.c src/ast_print.c src/scope.c src/edit.c src/codegen.c src/arena.c $(LDFLAGS)
 
-build/test_statements: test/test_statements.c src/lexer.c src/parser.c src/ast_print.c src/scope.c src/edit.c src/codegen.c
+build/test_statements: test/test_statements.c src/lexer.c src/parser.c src/ast_print.c src/scope.c src/edit.c src/codegen.c src/arena.c
 	@mkdir -p build
-	$(CC) $(CFLAGS) $(INC) -o $@ test/test_statements.c src/lexer.c src/parser.c src/ast_print.c src/scope.c src/edit.c src/codegen.c $(LDFLAGS)
+	$(CC) $(CFLAGS) $(INC) -o $@ test/test_statements.c src/lexer.c src/parser.c src/ast_print.c src/scope.c src/edit.c src/codegen.c src/arena.c $(LDFLAGS)
 
-build/test_phase1_full: test/test_phase1_full.c src/lexer.c src/parser.c src/ast_print.c src/scope.c src/edit.c src/codegen.c
+build/test_phase1_full: test/test_phase1_full.c src/lexer.c src/parser.c src/ast_print.c src/scope.c src/edit.c src/codegen.c src/arena.c
 	@mkdir -p build
-	$(CC) $(CFLAGS) $(INC) -o $@ test/test_phase1_full.c src/lexer.c src/parser.c src/ast_print.c src/scope.c src/edit.c $(LDFLAGS)
+	$(CC) $(CFLAGS) $(INC) -o $@ test/test_phase1_full.c src/lexer.c src/parser.c src/ast_print.c src/arena.c src/scope.c src/edit.c $(LDFLAGS)
 
-build/test_scope: test/test_scope.c src/lexer.c src/parser.c src/ast_print.c src/scope.c src/edit.c src/codegen.c
+build/test_scope: test/test_scope.c src/lexer.c src/parser.c src/ast_print.c src/scope.c src/edit.c src/codegen.c src/arena.c
 	@mkdir -p build
-	$(CC) $(CFLAGS) $(INC) -o $@ test/test_scope.c src/lexer.c src/parser.c src/ast_print.c src/scope.c src/edit.c src/codegen.c $(LDFLAGS)
+	$(CC) $(CFLAGS) $(INC) -o $@ test/test_scope.c src/lexer.c src/parser.c src/ast_print.c src/scope.c src/edit.c src/codegen.c src/arena.c $(LDFLAGS)
 
-build/test_edit: test/test_edit.c src/lexer.c src/parser.c src/ast_print.c src/scope.c src/edit.c src/codegen.c
+build/test_edit: test/test_edit.c src/lexer.c src/parser.c src/ast_print.c src/scope.c src/edit.c src/codegen.c src/arena.c
 	@mkdir -p build
-	$(CC) $(CFLAGS) $(INC) -o $@ test/test_edit.c src/lexer.c src/parser.c src/ast_print.c src/scope.c src/edit.c src/codegen.c $(LDFLAGS)
+	$(CC) $(CFLAGS) $(INC) -o $@ test/test_edit.c src/lexer.c src/parser.c src/ast_print.c src/scope.c src/edit.c src/codegen.c src/arena.c $(LDFLAGS)
 
-build/test_cfg: test/test_cfg.c src/lexer.c src/parser.c src/ast_print.c src/scope.c src/edit.c src/codegen.c src/cfg.c
+build/test_cfg: test/test_cfg.c src/lexer.c src/parser.c src/ast_print.c src/scope.c src/edit.c src/codegen.c src/arena.c src/cfg.c
 	@mkdir -p build
-	$(CC) $(CFLAGS) $(INC) -o $@ test/test_cfg.c src/lexer.c src/parser.c src/ast_print.c src/scope.c src/edit.c src/codegen.c src/cfg.c $(LDFLAGS)
+	$(CC) $(CFLAGS) $(INC) -o $@ test/test_cfg.c src/lexer.c src/parser.c src/ast_print.c src/scope.c src/edit.c src/codegen.c src/arena.c src/cfg.c $(LDFLAGS)
 
-build/test_integration_comprehensive: test/test_integration_comprehensive.c test/test_roundtrip_extended.c test/mock_modules.c src/lexer.c src/parser.c src/ast_print.c src/scope.c src/edit.c src/codegen.c
+build/test_integration_comprehensive: test/test_integration_comprehensive.c test/test_roundtrip_extended.c test/mock_modules.c src/lexer.c src/parser.c src/ast_print.c src/scope.c src/edit.c src/codegen.c src/arena.c
 	@mkdir -p build
-	$(CC) $(CFLAGS) $(INC) -o $@ test/test_integration_comprehensive.c test/test_roundtrip_extended.c test/mock_modules.c src/lexer.c src/parser.c src/ast_print.c src/scope.c src/edit.c src/codegen.c $(LDFLAGS)
+	$(CC) $(CFLAGS) $(INC) -o $@ test/test_integration_comprehensive.c test/test_roundtrip_extended.c test/mock_modules.c src/lexer.c src/parser.c src/ast_print.c src/scope.c src/edit.c src/codegen.c src/arena.c $(LDFLAGS)
 
-build/test_roundtrip_extended: test/test_roundtrip_extended.c test/test_roundtrip_extended_main.c test/mock_modules.c src/lexer.c src/parser.c src/ast_print.c src/scope.c src/edit.c src/codegen.c
+build/test_roundtrip_extended: test/test_roundtrip_extended.c test/test_roundtrip_extended_main.c test/mock_modules.c src/lexer.c src/parser.c src/ast_print.c src/scope.c src/edit.c src/codegen.c src/arena.c
 	@mkdir -p build
-	$(CC) $(CFLAGS) $(INC) -o $@ test/test_roundtrip_extended.c test/test_roundtrip_extended_main.c test/mock_modules.c src/lexer.c src/parser.c src/ast_print.c src/scope.c src/edit.c src/codegen.c $(LDFLAGS)
+	$(CC) $(CFLAGS) $(INC) -o $@ test/test_roundtrip_extended.c test/test_roundtrip_extended_main.c test/mock_modules.c src/lexer.c src/parser.c src/ast_print.c src/scope.c src/edit.c src/codegen.c src/arena.c $(LDFLAGS)
 
-build/test_phase2: test/test_phase2.c src/lexer.c src/parser.c src/ast_print.c src/scope.c src/edit.c src/codegen.c
+build/test_phase2: test/test_phase2.c src/lexer.c src/parser.c src/ast_print.c src/scope.c src/edit.c src/codegen.c src/arena.c
 	@mkdir -p build
-	$(CC) $(CFLAGS) $(INC) -o $@ test/test_phase2.c src/lexer.c src/parser.c src/ast_print.c src/scope.c src/edit.c src/codegen.c $(LDFLAGS)
+	$(CC) $(CFLAGS) $(INC) -o $@ test/test_phase2.c src/lexer.c src/parser.c src/ast_print.c src/scope.c src/edit.c src/codegen.c src/arena.c $(LDFLAGS)
+
+build/test_phase1_improvements: test/test_phase1_improvements.c src/lexer.c src/parser.c src/ast_print.c src/arena.c
+	@mkdir -p build
+	$(CC) $(CFLAGS) $(INC) -o $@ test/test_phase1_improvements.c src/lexer.c src/parser.c src/ast_print.c src/arena.c $(LDFLAGS)
+
+build/test_arena: test/test_arena.c src/arena.c src/lexer.c src/parser.c src/ast_print.c
+	@mkdir -p build
+	$(CC) $(CFLAGS) $(INC) -o $@ test/test_arena.c src/arena.c src/lexer.c src/parser.c src/ast_print.c $(LDFLAGS)
+
+build/test_context: test/test_context.c src/context.c src/arena.c
+	@mkdir -p build
+	$(CC) $(CFLAGS) $(INC) -o $@ test/test_context.c src/context.c src/arena.c $(LDFLAGS)
 
 test: tests
 	./build/test_integration
@@ -103,6 +115,9 @@ test: tests
 	./build/test_statements
 	./build/test_phase1_full
 	./build/test_phase2
+	./build/test_phase1_improvements
+	./build/test_arena
+	./build/test_context
 	./build/test_scope
 	./build/test_edit
 	./build/test_integration_comprehensive
@@ -118,7 +133,7 @@ run: $(BIN)
 coverage:
 	@mkdir -p build/coverage
 	$(CC) $(CFLAGS) $(COVERAGE_FLAGS) $(INC) -o build/coverage/test_all \
-		test/test_integration.c src/lexer.c src/parser.c src/ast_print.c src/scope.c src/edit.c src/codegen.c src/cfg.c
+		test/test_integration.c src/lexer.c src/parser.c src/ast_print.c src/scope.c src/edit.c src/codegen.c src/arena.c src/cfg.c
 
 test-coverage: coverage
 	@echo "Running tests with coverage..."
@@ -136,9 +151,9 @@ coverage-report: test-coverage
 # Benchmark targets
 benchmark: $(BENCHMARK_BIN)
 
-$(BENCHMARK_BIN): test/benchmark.c src/lexer.c src/parser.c src/ast_print.c src/scope.c src/edit.c src/codegen.c
+$(BENCHMARK_BIN): test/benchmark.c src/lexer.c src/parser.c src/ast_print.c src/scope.c src/edit.c src/codegen.c src/arena.c
 	@mkdir -p build/benchmark
-	$(CC) $(CFLAGS) $(INC) -o $@ test/benchmark.c src/lexer.c src/parser.c src/ast_print.c src/scope.c src/edit.c src/codegen.c $(LDFLAGS)
+	$(CC) $(CFLAGS) $(INC) -o $@ test/benchmark.c src/lexer.c src/parser.c src/ast_print.c src/scope.c src/edit.c src/codegen.c src/arena.c $(LDFLAGS)
 
 run-benchmark: benchmark
 	@mkdir -p build/benchmark
@@ -151,7 +166,7 @@ fuzz-build:
 	@echo "Building fuzzer with AFL..."
 	@mkdir -p build/fuzz
 	$(AFL_CC) $(CFLAGS) $(INC) -o $(FUZZ_BIN) test/fuzz_target.c \
-		src/lexer.c src/parser.c src/ast_print.c src/scope.c src/edit.c src/codegen.c $(LDFLAGS)
+		src/lexer.c src/parser.c src/ast_print.c src/scope.c src/edit.c src/codegen.c src/arena.c $(LDFLAGS)
 	@echo "Fuzzer built: $(FUZZ_BIN)"
 
 fuzz-test: fuzz-build

@@ -2,6 +2,7 @@
 #define QUICKJSFLOW_AST_H
 
 #include <stddef.h>
+#include "quickjsflow/arena.h"
 
 typedef enum {
     // Phase 1: Essential Features
@@ -450,5 +451,12 @@ void ast_free(AstNode *node);
 void ast_retain(AstNode *node);
 void ast_release(AstNode *node);
 AstNode *ast_clone(const AstNode *node);
+
+/* Optional Arena integration for bulk AST allocation.
+ * When set, new_node() allocates AstNode wrappers from the arena.
+ * Payload structs continue using heap allocation for now.
+ * Set to NULL (default) for pure heap allocation. */
+void ast_set_arena(Arena *arena);
+Arena *ast_get_arena(void);
 
 #endif

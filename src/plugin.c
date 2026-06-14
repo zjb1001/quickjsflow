@@ -150,7 +150,70 @@ static AstNode *traverse_with_plugin(AstNode *node, Plugin *plugin, PluginContex
             }
             break;
         }
-        // Add more cases as needed
+        // Phase 2 types
+        case AST_ForOfStatement: {
+            ForOfStatement *fos = (ForOfStatement *)result->data;
+            if (fos) {
+                if (fos->left) fos->left = traverse_with_plugin(fos->left, plugin, ctx);
+                if (fos->right) fos->right = traverse_with_plugin(fos->right, plugin, ctx);
+                if (fos->body) fos->body = traverse_with_plugin(fos->body, plugin, ctx);
+            }
+            break;
+        }
+        case AST_ForInStatement: {
+            ForInStatement *fis = (ForInStatement *)result->data;
+            if (fis) {
+                if (fis->left) fis->left = traverse_with_plugin(fis->left, plugin, ctx);
+                if (fis->right) fis->right = traverse_with_plugin(fis->right, plugin, ctx);
+                if (fis->body) fis->body = traverse_with_plugin(fis->body, plugin, ctx);
+            }
+            break;
+        }
+        case AST_ClassDeclaration: {
+            ClassDeclaration *cd = (ClassDeclaration *)result->data;
+            if (cd) {
+                if (cd->id) cd->id = traverse_with_plugin(cd->id, plugin, ctx);
+                if (cd->superClass) cd->superClass = traverse_with_plugin(cd->superClass, plugin, ctx);
+                for (size_t i = 0; i < cd->body.count; i++) {
+                    AstNode *child = traverse_with_plugin(cd->body.items[i], plugin, ctx);
+                    if (child) cd->body.items[i] = child;
+                }
+            }
+            break;
+        }
+        case AST_ClassExpression: {
+            ClassExpression *ce = (ClassExpression *)result->data;
+            if (ce) {
+                if (ce->id) ce->id = traverse_with_plugin(ce->id, plugin, ctx);
+                if (ce->superClass) ce->superClass = traverse_with_plugin(ce->superClass, plugin, ctx);
+                for (size_t i = 0; i < ce->body.count; i++) {
+                    AstNode *child = traverse_with_plugin(ce->body.items[i], plugin, ctx);
+                    if (child) ce->body.items[i] = child;
+                }
+            }
+            break;
+        }
+        case AST_ArrowFunctionExpression: {
+            ArrowFunctionExpression *afe = (ArrowFunctionExpression *)result->data;
+            if (afe) {
+                for (size_t i = 0; i < afe->params.count; i++) {
+                    AstNode *child = traverse_with_plugin(afe->params.items[i], plugin, ctx);
+                    if (child) afe->params.items[i] = child;
+                }
+                if (afe->body) afe->body = traverse_with_plugin(afe->body, plugin, ctx);
+            }
+            break;
+        }
+        case AST_TemplateLiteral: {
+            TemplateLiteral *tl = (TemplateLiteral *)result->data;
+            if (tl) {
+                for (size_t i = 0; i < tl->expressions.count; i++) {
+                    AstNode *child = traverse_with_plugin(tl->expressions.items[i], plugin, ctx);
+                    if (child) tl->expressions.items[i] = child;
+                }
+            }
+            break;
+        }
         default:
             break;
     }

@@ -254,6 +254,74 @@ int test_ast_node_constructors() {
     TEST_END;
 }
 
+// Arrow function roundtrip tests
+int test_arrow_empty_params() {
+    TEST("arrow empty params () => expr");
+    const char *code = "const hi = () => 42;";
+    AstNode *ast = parse_code(code);
+    ASSERT(ast != NULL, "Parse arrow empty params");
+    ASSERT(ast->type == AST_Program, "Root is Program");
+    Program *prog = (Program *)ast->data;
+    ASSERT(prog->body.count > 0, "Has statements");
+    AstNode *stmt = prog->body.items[0];
+    ASSERT(stmt->type == AST_VariableDeclaration, "Is VariableDeclaration");
+    VariableDeclaration *vd = (VariableDeclaration *)stmt->data;
+    AstNode *decl = vd->declarations.items[0];
+    VariableDeclarator *vdt = (VariableDeclarator *)decl->data;
+    ASSERT(vdt->init != NULL, "Has initializer");
+    ASSERT(vdt->init->type == AST_ArrowFunctionExpression, "Is ArrowFunctionExpression");
+    ArrowFunctionExpression *afe = (ArrowFunctionExpression *)vdt->init->data;
+    ASSERT(afe->params.count == 0, "Arrow has 0 params");
+    ast_free(ast);
+    TEST_END;
+}
+
+int test_arrow_multi_params() {
+    TEST("arrow multi params (a, b) => expr");
+    const char *code = "const add = (a, b) => a + b;";
+    AstNode *ast = parse_code(code);
+    ASSERT(ast != NULL, "Parse arrow multi params");
+    AstNode *stmt = ((Program *)ast->data)->body.items[0];
+    VariableDeclaration *vd = (VariableDeclaration *)stmt->data;
+    VariableDeclarator *vdt = (VariableDeclarator *)vd->declarations.items[0]->data;
+    ASSERT(vdt->init->type == AST_ArrowFunctionExpression, "Is ArrowFunctionExpression");
+    ArrowFunctionExpression *afe = (ArrowFunctionExpression *)vdt->init->data;
+    ASSERT(afe->params.count == 2, "Arrow has 2 params");
+    ast_free(ast);
+    TEST_END;
+}
+
+int test_arrow_single_param() {
+    TEST("arrow single param x => expr");
+    const char *code = "const sq = x => x * x;";
+    AstNode *ast = parse_code(code);
+    ASSERT(ast != NULL, "Parse arrow single param");
+    AstNode *stmt = ((Program *)ast->data)->body.items[0];
+    VariableDeclaration *vd = (VariableDeclaration *)stmt->data;
+    VariableDeclarator *vdt = (VariableDeclarator *)vd->declarations.items[0]->data;
+    ASSERT(vdt->init->type == AST_ArrowFunctionExpression, "Is ArrowFunctionExpression");
+    ArrowFunctionExpression *afe = (ArrowFunctionExpression *)vdt->init->data;
+    ASSERT(afe->params.count == 1, "Arrow has 1 param");
+    ast_free(ast);
+    TEST_END;
+}
+
+int test_compound_assignment() {
+    TEST("compound assignment +=");
+    const char *code = "x += 5;";
+    AstNode *ast = parse_code(code);
+    ASSERT(ast != NULL, "Parse +=");
+    AstNode *stmt = ((Program *)ast->data)->body.items[0];
+    ASSERT(stmt->type == AST_ExpressionStatement, "Is ExpressionStatement");
+    ExpressionStatement *es = (ExpressionStatement *)stmt->data;
+    ASSERT(es->expression->type == AST_AssignmentExpression, "Is AssignmentExpression");
+    AssignmentExpression *ae = (AssignmentExpression *)es->expression->data;
+    ASSERT(ae->operator != NULL, "Has operator");
+    ASSERT(strcmp(ae->operator, "+=") == 0, "Operator is +=");
+    ast_free(ast);
+    TEST_END;
+}
+
 int main() {
     printf("======================\n");
     printf("Phase 2 Feature Tests\n");
@@ -267,6 +335,10 @@ int main() {
     test_this_expression();
     test_super_expression();
     test_ast_node_constructors();
+    test_arrow_empty_params();
+    test_arrow_multi_params();
+    test_arrow_single_param();
+    test_compound_assignment();
     
     printf("\n======================\n");
     printf("Results: %d/%d tests passed\n", test_passed, test_count);

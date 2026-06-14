@@ -2,6 +2,23 @@
 #include <stdlib.h>
 #include <string.h>
 #include "quickjsflow/ast.h"
+#include "quickjsflow/arena.h"
+
+/* Optional Arena for AST node allocation. NULL = use malloc heap. */
+static Arena *ast_arena = NULL;
+
+void ast_set_arena(Arena *arena) { ast_arena = arena; }
+Arena *ast_get_arena(void) { return ast_arena; }
+
+/* Allocate zeroed memory: arena (if set) or heap fallback. */
+static void *ast_alloc(size_t size) {
+    if (ast_arena) {
+        void *p = arena_alloc_default(ast_arena, size);
+        if (p) memset(p, 0, size);
+        return p;
+    }
+    return calloc(1, size);
+}
 
 static char *dupstr(const char *s) {
     if (!s) return NULL;
@@ -80,7 +97,7 @@ Comment *comment_clone(const Comment *c) {
 }
 
 static AstNode *new_node(AstNodeType t) {
-    AstNode *n = (AstNode *)calloc(1, sizeof(AstNode));
+    AstNode *n = (AstNode *)ast_alloc(sizeof(AstNode));
     if (n) {
         n->type = t;
         n->refcount = 1;
@@ -1887,5 +1904,6 @@ static void free_node(AstNode *n) {
             case AST_ThisExpression: free_this_expr((ThisExpression *)n->data); break;
         case AST_Error: free_error((ErrorNode *)n->data); break;
     }
-    free(n);
+    /* Only free the node wrapper if heap-allocated; arena nodes live with arena */
+    if (!ast_arena) free(n);
 }

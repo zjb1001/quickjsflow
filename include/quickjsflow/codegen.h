@@ -12,13 +12,20 @@ typedef struct {
 } CodegenOptions;
 
 // Result of code generation. Caller owns the buffers and must free with
-// codegen_result_free.
+// codegen_result_free. When owner_arena is set, the code buffer is arena-backed
+// and codegen_result_free will not free() it.
 typedef struct {
     char *code;       // generated JavaScript source
     char *source_map; // JSON string; NULL when emit_source_map==0
+    Arena *owner_arena;       // internal: set by qjsf_codegen()
 } CodegenResult;
 
 CodegenResult codegen_generate(const AstNode *root, const CodegenOptions *options);
 void codegen_result_free(CodegenResult *result);
+
+/* Context-based codegen: allocates output from ctx's arena.
+ * The returned CodegenResult.code is arena-backed; freed with ctx. */
+struct qjsf_context_s;
+CodegenResult qjsf_codegen(struct qjsf_context_s *ctx, const AstNode *root, const CodegenOptions *options);
 
 #endif
